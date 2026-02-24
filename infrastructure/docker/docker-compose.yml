@@ -1,0 +1,176 @@
+version: "3.9"
+
+services:
+  # ─── API Server ────────────────────────────────────────────
+  api:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://throwbox:${DB_PASSWORD}@postgres:5432/throwbox
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - AI_PROVIDER=claude
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - HCAPTCHA_SECRET=${HCAPTCHA_SECRET}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - CORS_ORIGINS=https://throwbox.net,https://www.throwbox.net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - throwbox
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Mail Worker ───────────────────────────────────────────
+  mail-worker:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    command: ["node", "dist/workers/mail.worker.js"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://throwbox:${DB_PASSWORD}@postgres:5432/throwbox
+      - REDIS_URL=redis://redis:6379
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - throwbox
+
+  # ─── AI Worker ─────────────────────────────────────────────
+  ai-worker:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    command: ["node", "dist/workers/ai.worker.js"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://throwbox:${DB_PASSWORD}@postgres:5432/throwbox
+      - REDIS_URL=redis://redis:6379
+      - AI_PROVIDER=claude
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - throwbox
+
+  # ─── SMTP Server (Haraka) ─────────────────────────────────
+  smtp:
+    build:
+      context: ../../infrastructure/docker/haraka
+      dockerfile: Dockerfile
+    ports:
+      - "25:25"
+      - "587:587"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - API_URL=http://api:3000
+    depends_on:
+      - redis
+      - api
+    restart: unless-stopped
+    networks:
+      - throwbox
+
+  # ─── Frontend ──────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - throwbox
+
+  # ─── PostgreSQL ────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=throwbox
+      - POSTGRES_USER=throwbox
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../../backend/database/migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql
+    restart: unless-stopped
+    networks:
+      - throwbox
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U throwbox"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - throwbox
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── MinIO (S3-compatible, dev/staging) ────────────────────
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${S3_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${S3_SECRET_KEY}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+    networks:
+      - throwbox
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  throwbox:
+    driver: bridge

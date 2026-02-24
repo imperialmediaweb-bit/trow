@@ -1,0 +1,63 @@
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '../stores/auth.js';
+
+const router = useRouter();
+const auth = useAuthStore();
+const email = ref('');
+const password = ref('');
+const name = ref('');
+const error = ref('');
+const loading = ref(false);
+
+async function handleRegister() {
+  loading.value = true;
+  error.value = '';
+  try {
+    await auth.register(email.value, password.value, name.value || undefined);
+    router.push('/inbox');
+  } catch (err: any) {
+    error.value = err.response?.data?.error?.message || 'Registration failed';
+  } finally {
+    loading.value = false;
+  }
+}
+</script>
+
+<template>
+  <div class="min-h-[60vh] flex items-center justify-center px-4">
+    <div class="w-full max-w-md">
+      <h1 class="text-3xl font-bold text-center text-gray-900 dark:text-white mb-8">Create Account</h1>
+
+      <div v-if="error" class="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{{ error }}</div>
+
+      <form @submit.prevent="handleRegister" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name (optional)</label>
+          <input v-model="name" type="text"
+            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-3" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+          <input v-model="email" type="email" required
+            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-3" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+          <input v-model="password" type="password" required minlength="8"
+            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-3" />
+        </div>
+        <button type="submit" :disabled="loading"
+          class="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50">
+          {{ loading ? 'Creating...' : 'Create Account' }}
+        </button>
+      </form>
+
+      <p class="mt-6 text-center text-sm text-gray-500">
+        Already have an account?
+        <router-link to="/login" class="text-indigo-600 hover:text-indigo-500 font-medium">Log in</router-link>
+      </p>
+    </div>
+  </div>
+</template>
