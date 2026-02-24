@@ -2,11 +2,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
+COPY backend/package.json backend/package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-COPY tsconfig.json ./
-COPY src/ ./src/
+COPY backend/tsconfig.json ./
+COPY backend/src/ ./src/
 
 RUN npm run build
 
@@ -18,7 +18,7 @@ WORKDIR /app
 RUN addgroup -g 1001 -S throwbox && \
     adduser -S throwbox -u 1001
 
-COPY package.json package-lock.json* ./
+COPY backend/package.json backend/package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
