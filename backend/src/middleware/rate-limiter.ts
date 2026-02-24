@@ -8,7 +8,7 @@ export const rateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(...args) as Promise<any>,
+    sendCommand: (...args: string[]) => redis.call(args[0], ...args.slice(1)) as Promise<any>,
   }),
   message: {
     success: false,
@@ -28,7 +28,7 @@ export function createPlanLimiter(maxRequests: number) {
     standardHeaders: true,
     legacyHeaders: false,
     store: new RedisStore({
-      sendCommand: (...args: string[]) => redis.call(...args) as Promise<any>,
+      sendCommand: (...args: string[]) => redis.call(args[0], ...args.slice(1)) as Promise<any>,
     }),
   });
 }

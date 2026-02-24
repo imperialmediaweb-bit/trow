@@ -122,7 +122,7 @@ inboxRouter.get('/', authenticate, async (req: Request, res: Response) => {
 
   res.json({
     success: true,
-    data: result.rows.map((row) => ({
+    data: result.rows.map((row: any) => ({
       ...row,
       full_address: `${row.address}@${row.domain}`,
     })),
