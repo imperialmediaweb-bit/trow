@@ -24,14 +24,14 @@ export function setupWebSocket(io: SocketServer): void {
     socket.on('subscribe_inbox', async (data: { inbox_id: string; token?: string }) => {
       const room = `inbox:${data.inbox_id}`;
       await socket.join(room);
-      await redis.sadd(`ws:inbox:${data.inbox_id}:subscribers`, socket.id);
+      await redis?.sadd(`ws:inbox:${data.inbox_id}:subscribers`, socket.id);
       logger.debug('Subscribed to inbox', { socket: socket.id, inbox: data.inbox_id });
     });
 
     socket.on('unsubscribe_inbox', async (data: { inbox_id: string }) => {
       const room = `inbox:${data.inbox_id}`;
       await socket.leave(room);
-      await redis.srem(`ws:inbox:${data.inbox_id}:subscribers`, socket.id);
+      await redis?.srem(`ws:inbox:${data.inbox_id}:subscribers`, socket.id);
     });
 
     socket.on('disconnect', async () => {

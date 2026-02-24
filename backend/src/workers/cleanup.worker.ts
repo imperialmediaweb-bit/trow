@@ -17,7 +17,7 @@ cron.schedule('* * * * *', async () => {
 
       // Clean Redis cache
       for (const row of result.rows) {
-        await redis.del(`inbox:${row.id}`);
+        await redis?.del(`inbox:${row.id}`);
       }
     }
   } catch (err) {

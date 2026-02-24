@@ -82,7 +82,7 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
     throw new AppError(400, 'MISSING_TOKEN', 'Refresh token required');
   }
 
-  const blacklisted = await redis.get(`blacklist:${refresh_token}`);
+  const blacklisted = await redis?.get(`blacklist:${refresh_token}`);
   if (blacklisted) {
     throw new AppError(401, 'TOKEN_REVOKED', 'Token has been revoked');
   }
@@ -91,7 +91,7 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
     const payload = jwt.verify(refresh_token, config.jwtRefreshSecret) as any;
 
     // Blacklist old refresh token (rotation)
-    await redis.set(`blacklist:${refresh_token}`, '1', 'EX', 7 * 24 * 3600);
+    await redis?.set(`blacklist:${refresh_token}`, '1', 'EX', 7 * 24 * 3600);
 
     const result = await pool.query(
       'SELECT id, email, role, plan FROM users WHERE id = $1 AND deleted_at IS NULL',
@@ -113,7 +113,7 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
 authRouter.post('/logout', authenticate, async (req: Request, res: Response) => {
   const token = req.headers.authorization?.slice(7);
   if (token) {
-    await redis.set(`blacklist:${token}`, '1', 'EX', 900); // 15 min JWT TTL
+    await redis?.set(`blacklist:${token}`, '1', 'EX', 900); // 15 min JWT TTL
   }
   res.json({ success: true, data: { message: 'Logged out' } });
 });

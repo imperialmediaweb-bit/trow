@@ -67,7 +67,7 @@ adminRouter.get('/system/health', async (_req: Request, res: Response) => {
   // Redis
   try {
     const start = Date.now();
-    await redis.ping();
+    await redis?.ping();
     checks.redis = { status: 'ok', latency_ms: Date.now() - start };
   } catch (err) {
     checks.redis = { status: 'error', error: (err as Error).message };

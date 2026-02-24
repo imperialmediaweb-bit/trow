@@ -4,8 +4,9 @@ import { redis } from '../config/redis.js';
 
 function getStore(): Store | undefined {
   if (!redis) return undefined; // falls back to built-in memory store
+  const r = redis;
   return new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(args[0], ...args.slice(1)) as Promise<any>,
+    sendCommand: (...args: string[]) => r.call(args[0], ...args.slice(1)) as Promise<any>,
   });
 }
 

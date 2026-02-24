@@ -71,13 +71,13 @@ inboxRouter.post('/', optionalAuth, async (req: Request, res: Response) => {
   const inbox = result.rows[0];
 
   // Cache in Redis
-  await redis.set(
+  await redis?.set(
     `inbox:${id}`,
     JSON.stringify(inbox),
     'EX',
     data.ttl,
   );
-  await redis.set(
+  await redis?.set(
     `inbox:addr:${prefix}@${domain}`,
     id,
     'EX',
@@ -142,7 +142,7 @@ inboxRouter.delete('/:id', optionalAuth, async (req: Request, res: Response) => 
   await getInboxWithAuth(req.params.id, req);
 
   await pool.query('UPDATE inboxes SET is_active = false WHERE id = $1', [req.params.id]);
-  await redis.del(`inbox:${req.params.id}`);
+  await redis?.del(`inbox:${req.params.id}`);
 
   res.json({ success: true, data: { message: 'Inbox deleted' } });
 });

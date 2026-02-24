@@ -19,7 +19,7 @@ const inboundWorker = new Worker(
 
     // Find inbox
     const [localPart, domain] = recipient.split('@');
-    const inboxId = await redis.get(`inbox:addr:${recipient}`);
+    const inboxId = await redis?.get(`inbox:addr:${recipient}`);
 
     if (!inboxId) {
       // Try database
