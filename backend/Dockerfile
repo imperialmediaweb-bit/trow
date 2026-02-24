@@ -23,6 +23,8 @@ RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit
 
 COPY --from=builder /app/dist ./dist
 
+ENV NODE_ENV=production
+
 USER throwbox
 
 EXPOSE 3000
