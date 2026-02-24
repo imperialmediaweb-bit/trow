@@ -22,7 +22,6 @@ COPY package.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
-COPY database/ ./database/
 
 USER throwbox
 
