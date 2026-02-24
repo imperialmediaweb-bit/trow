@@ -1,15 +1,20 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { type Store } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { redis } from '../config/redis.js';
+
+function getStore(): Store | undefined {
+  if (!redis) return undefined; // falls back to built-in memory store
+  return new RedisStore({
+    sendCommand: (...args: string[]) => redis.call(args[0], ...args.slice(1)) as Promise<any>,
+  });
+}
 
 export const rateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  store: new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(args[0], ...args.slice(1)) as Promise<any>,
-  }),
+  store: getStore(),
   message: {
     success: false,
     error: {
@@ -27,8 +32,6 @@ export function createPlanLimiter(maxRequests: number) {
     max: maxRequests,
     standardHeaders: true,
     legacyHeaders: false,
-    store: new RedisStore({
-      sendCommand: (...args: string[]) => redis.call(args[0], ...args.slice(1)) as Promise<any>,
-    }),
+    store: getStore(),
   });
 }
