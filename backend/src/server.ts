@@ -33,16 +33,7 @@ const io = new SocketServer(server, {
 
 setupWebSocket(io);
 
-// ─── Middleware ──────────────────────────────────────────────
-app.use(helmet());
-app.use(compression());
-app.use(cors({ origin: config.corsOrigins, credentials: true }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
-app.use(rateLimiter);
-
-// ─── Health Check ───────────────────────────────────────────
+// ─── Health Check (before middleware so it works even if Redis is down) ──
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
@@ -51,6 +42,15 @@ app.get('/health', (_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// ─── Middleware ──────────────────────────────────────────────
+app.use(helmet());
+app.use(compression());
+app.use(cors({ origin: config.corsOrigins, credentials: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
+app.use(rateLimiter);
 
 // ─── API Routes ─────────────────────────────────────────────
 const api = express.Router();
