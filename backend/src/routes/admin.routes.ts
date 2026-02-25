@@ -23,7 +23,7 @@ adminRouter.get('/stats', async (_req: Request, res: Response) => {
     pool.query('SELECT COUNT(*) FROM inboxes WHERE is_active = true AND expires_at > NOW()'),
     pool.query("SELECT COUNT(*) FROM users WHERE plan != 'free' AND deleted_at IS NULL"),
     pool.query("SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE AND deleted_at IS NULL"),
-    pool.query("SELECT COUNT(*) FROM emails WHERE received_at >= CURRENT_DATE"),
+    pool.query("SELECT COUNT(*) FROM emails WHERE created_at >= CURRENT_DATE"),
   ]);
 
   res.json({
@@ -52,9 +52,9 @@ adminRouter.get('/analytics', async (req: Request, res: Response) => {
       [days],
     ),
     pool.query(
-      `SELECT DATE(received_at) as date, COUNT(*) as count
-       FROM emails WHERE received_at >= NOW() - INTERVAL '1 day' * $1
-       GROUP BY DATE(received_at) ORDER BY date`,
+      `SELECT DATE(created_at) as date, COUNT(*) as count
+       FROM emails WHERE created_at >= NOW() - INTERVAL '1 day' * $1
+       GROUP BY DATE(created_at) ORDER BY date`,
       [days],
     ),
     pool.query(
@@ -316,34 +316,50 @@ adminRouter.put('/settings/:section', async (req: Request, res: Response) => {
 
 // POST /admin/smtp/test
 adminRouter.post('/smtp/test', async (req: Request, res: Response) => {
-  const { host, port, secure, username, password, from_email, test_to } = req.body;
+  const { provider, host, port, secure, username, password, from_email, test_to, resend_api_key } = req.body;
 
   if (!test_to) {
     throw new AppError(400, 'MISSING_FIELD', 'test_to email is required');
   }
 
   try {
-    const nodemailer = await import('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host,
-      port: parseInt(port),
-      secure,
-      auth: username ? { user: username, pass: password } : undefined,
-    });
+    if (provider === 'resend' && resend_api_key) {
+      // Test via Resend
+      const { Resend } = await import('resend');
+      const resend = new Resend(resend_api_key);
+      const { error } = await resend.emails.send({
+        from: `Throwbox AI <${from_email || 'noreply@throwbox.net'}>`,
+        to: [test_to],
+        subject: 'Throwbox AI - Resend Test',
+        text: 'If you receive this email, your Resend configuration is working correctly.',
+        html: '<h2>Resend Test Successful</h2><p>Your Resend email configuration is working correctly.</p>',
+      });
 
-    await transporter.sendMail({
-      from: `Throwbox AI <${from_email}>`,
-      to: test_to,
-      subject: 'Throwbox AI - SMTP Test',
-      text: 'If you receive this email, your SMTP configuration is working correctly.',
-      html: '<h2>SMTP Test Successful</h2><p>Your SMTP configuration is working correctly.</p>',
-    });
+      if (error) throw new Error(error.message);
+    } else {
+      // Test via SMTP
+      const nodemailer = await import('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host,
+        port: parseInt(port),
+        secure,
+        auth: username ? { user: username, pass: password } : undefined,
+      });
+
+      await transporter.sendMail({
+        from: `Throwbox AI <${from_email}>`,
+        to: test_to,
+        subject: 'Throwbox AI - SMTP Test',
+        text: 'If you receive this email, your SMTP configuration is working correctly.',
+        html: '<h2>SMTP Test Successful</h2><p>Your SMTP configuration is working correctly.</p>',
+      });
+    }
 
     res.json({ success: true, data: { message: 'Test email sent successfully' } });
   } catch (err) {
     res.json({
       success: false,
-      error: { code: 'SMTP_ERROR', message: (err as Error).message },
+      error: { code: 'EMAIL_ERROR', message: (err as Error).message },
     });
   }
 });

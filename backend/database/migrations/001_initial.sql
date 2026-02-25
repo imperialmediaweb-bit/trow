@@ -20,6 +20,7 @@ CREATE TABLE users (
     totp_secret     VARCHAR(255),
     locale          VARCHAR(5) DEFAULT 'en',
     timezone        VARCHAR(50) DEFAULT 'UTC',
+    is_banned       BOOLEAN DEFAULT false,
     last_login_at   TIMESTAMPTZ,
     last_login_ip   INET,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
@@ -307,17 +308,41 @@ CREATE TABLE audit_logs (
 CREATE INDEX idx_audit_user ON audit_logs(user_id, created_at DESC);
 CREATE INDEX idx_audit_action ON audit_logs(action, created_at DESC);
 
+-- ─── Site Settings (Admin Panel) ──────────────────────────────
+CREATE TABLE site_settings (
+    key             VARCHAR(255) PRIMARY KEY,
+    value           JSONB NOT NULL DEFAULT '{}',
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── Custom Pages (Admin Panel) ──────────────────────────────
+CREATE TABLE pages (
+    id              VARCHAR(100) PRIMARY KEY,
+    title           VARCHAR(255) NOT NULL,
+    slug            VARCHAR(255) UNIQUE NOT NULL,
+    content         TEXT DEFAULT '',
+    is_published    BOOLEAN DEFAULT false,
+    meta_title      VARCHAR(255) DEFAULT '',
+    meta_description TEXT DEFAULT '',
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── Emails received_at alias ─────────────────────────────────
+-- (admin analytics queries use received_at; it maps to created_at)
+CREATE INDEX idx_emails_received ON emails(created_at);
+
 -- ─── Seed Default Domain ────────────────────────────────────
 INSERT INTO domains (domain, mx_verified, spf_record, dmarc_policy, is_active, is_premium)
 VALUES
   ('throwbox.net', true, 'v=spf1 include:_spf.throwbox.net -all', 'reject', true, false),
   ('tmpmail.dev', false, NULL, 'none', true, true);
 
--- ─── Create Admin User (change password immediately) ────────
+-- ─── Create Admin User (password: admin123 — CHANGE IMMEDIATELY) ──
 INSERT INTO users (email, password_hash, display_name, role, plan, email_verified)
 VALUES (
   'admin@throwbox.net',
-  '$2a$12$placeholder.hash.change.this.immediately',
+  '$2a$12$UDlzNzs/JWxIQha2y5Qcx.C95XzUToVbub1qeaGJJKQBlpCqqZjG6',
   'Admin',
   'superadmin',
   'enterprise',

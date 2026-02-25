@@ -1,10 +1,45 @@
-import { Worker, Job } from 'bullmq';
+import { Worker, Job, Queue } from 'bullmq';
 import { simpleParser } from 'mailparser';
+import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { pool } from '../config/database.js';
 import { redis } from '../config/redis.js';
 import { logger } from '../config/logger.js';
 import { encrypt } from '../services/encryption.service.js';
 import { v4 as uuidv4 } from 'uuid';
+
+// ─── Email sender helper (Resend or SMTP) ───────────────────
+async function sendOutbound(params: { from: string; to: string; subject: string; text: string; html?: string }) {
+  if (process.env.EMAIL_PROVIDER === 'resend' && process.env.RESEND_API_KEY) {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const { error } = await resend.emails.send({
+      from: params.from,
+      to: [params.to],
+      subject: params.subject,
+      text: params.text,
+      html: params.html,
+    });
+    if (error) throw new Error(error.message);
+  } else {
+    const transport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'localhost',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: parseInt(process.env.SMTP_PORT || '587') === 465,
+      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+      tls: { rejectUnauthorized: false },
+    });
+    await transport.sendMail(params);
+  }
+}
+
+// ─── AI Analysis Queue ──────────────────────────────────────
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+let aiQueue: Queue | null = null;
+try {
+  aiQueue = new Queue('ai-analysis', { connection: { url: redisUrl } });
+} catch (err) {
+  logger.warn('Could not connect AI queue', { error: (err as Error).message });
+}
 
 // ─── Inbound Email Worker ───────────────────────────────────
 const inboundWorker = new Worker(
@@ -19,10 +54,9 @@ const inboundWorker = new Worker(
 
     // Find inbox
     const [localPart, domain] = recipient.split('@');
-    const inboxId = await redis?.get(`inbox:addr:${recipient}`);
+    let resolvedInboxId = await redis?.get(`inbox:addr:${recipient}`);
 
-    if (!inboxId) {
-      // Try database
+    if (!resolvedInboxId) {
       const inboxResult = await pool.query(
         `SELECT i.id FROM inboxes i JOIN domains d ON i.domain_id = d.id
          WHERE i.address = $1 AND d.domain = $2 AND i.is_active = true AND i.expires_at > NOW()`,
@@ -33,13 +67,8 @@ const inboundWorker = new Worker(
         logger.warn('No active inbox for recipient', { recipient });
         return { status: 'rejected', reason: 'no_inbox' };
       }
+      resolvedInboxId = inboxResult.rows[0].id;
     }
-
-    const resolvedInboxId = inboxId || (await pool.query(
-      `SELECT i.id FROM inboxes i JOIN domains d ON i.domain_id = d.id
-       WHERE i.address = $1 AND d.domain = $2`,
-      [localPart, domain],
-    )).rows[0]?.id;
 
     if (!resolvedInboxId) {
       return { status: 'rejected', reason: 'no_inbox' };
@@ -83,17 +112,84 @@ const inboundWorker = new Worker(
       [resolvedInboxId],
     );
 
-    // TODO: Store attachments in S3
-    // TODO: Queue AI analysis job
-    // TODO: Emit WebSocket notification
-    // TODO: Check forwarding rules
+    // Store attachment metadata
+    if (parsed.attachments && parsed.attachments.length > 0) {
+      for (const att of parsed.attachments) {
+        await pool.query(
+          `INSERT INTO email_attachments (email_id, filename, content_type, size_bytes, storage_key, checksum_sha256, is_inline, content_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            emailId,
+            att.filename || 'unnamed',
+            att.contentType || 'application/octet-stream',
+            att.size || 0,
+            `local/${emailId}/${att.filename || uuidv4()}`,
+            att.checksum || null,
+            att.contentDisposition === 'inline',
+            att.contentId || null,
+          ],
+        );
+      }
+    }
+
+    // Queue AI analysis job
+    if (aiQueue) {
+      try {
+        await aiQueue.add('analyze', { emailId }, {
+          delay: 1000,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+        });
+        logger.debug('AI analysis job queued', { emailId });
+      } catch (err) {
+        logger.warn('Failed to queue AI analysis', { emailId, error: (err as Error).message });
+      }
+    }
+
+    // Check forwarding rules
+    const inboxData = await pool.query(
+      'SELECT forwarding_to, auto_reply_msg FROM inboxes WHERE id = $1',
+      [resolvedInboxId],
+    );
+    const inbox = inboxData.rows[0];
+
+    // Forward email via Resend or SMTP
+    if (inbox?.forwarding_to) {
+      try {
+        await sendOutbound({
+          from: `Throwbox Forwarding <noreply@${domain}>`,
+          to: inbox.forwarding_to,
+          subject: `[Fwd] ${parsed.subject || '(no subject)'}`,
+          text: `Forwarded from ${recipient}\nFrom: ${sender}\n\n${parsed.text || ''}`,
+          html: parsed.html ? `<p><em>Forwarded from ${recipient} | From: ${sender}</em></p><hr>${parsed.html}` : undefined,
+        });
+        logger.info('Email forwarded', { emailId, forwardTo: inbox.forwarding_to });
+      } catch (err) {
+        logger.error('Email forwarding failed', { emailId, error: (err as Error).message });
+      }
+    }
+
+    // Send auto-reply
+    if (inbox?.auto_reply_msg) {
+      try {
+        await sendOutbound({
+          from: `Throwbox <${recipient}>`,
+          to: sender,
+          subject: `Re: ${parsed.subject || '(no subject)'}`,
+          text: inbox.auto_reply_msg,
+        });
+        logger.info('Auto-reply sent', { emailId, to: sender });
+      } catch (err) {
+        logger.error('Auto-reply failed', { emailId, error: (err as Error).message });
+      }
+    }
 
     logger.info('Email stored', { emailId, inbox: resolvedInboxId });
 
     return { status: 'stored', emailId };
   },
   {
-    connection: { url: process.env.REDIS_URL || 'redis://localhost:6379' },
+    connection: { url: redisUrl },
     concurrency: 10,
   },
 );

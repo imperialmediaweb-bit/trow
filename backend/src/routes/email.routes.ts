@@ -1,12 +1,91 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
+import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { pool } from '../config/database.js';
 import { sendEmailSchema } from '../models/schemas.js';
 import { authenticate } from '../middleware/auth.js';
 import { AppError } from '../middleware/error-handler.js';
 import { checkSpamRisk } from '../services/ai.service.js';
 import { decrypt } from '../services/encryption.service.js';
+import { config } from '../config/index.js';
+import { logger } from '../config/logger.js';
 
 export const emailRouter = Router();
+
+// ─── Email Sending (Resend primary, SMTP fallback) ─────────
+
+async function sendViaResend(params: {
+  from: string;
+  to: string[];
+  cc?: string[];
+  subject: string;
+  text: string;
+  html?: string;
+  messageId: string;
+}) {
+  const resend = new Resend(config.resendApiKey);
+  const { data, error } = await resend.emails.send({
+    from: params.from,
+    to: params.to,
+    cc: params.cc?.length ? params.cc : undefined,
+    subject: params.subject,
+    text: params.text,
+    html: params.html,
+    headers: { 'X-Message-Id': params.messageId },
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+async function sendViaSmtp(params: {
+  from: string;
+  to: string[];
+  cc?: string[];
+  subject: string;
+  text: string;
+  html?: string;
+  messageId: string;
+  domain: string;
+}) {
+  const transport = nodemailer.createTransport({
+    host: config.smtpHost,
+    port: config.smtpPort,
+    secure: config.smtpPort === 465,
+    auth: config.smtpUser ? { user: config.smtpUser, pass: config.smtpPass } : undefined,
+    tls: { rejectUnauthorized: false },
+  });
+
+  await transport.sendMail({
+    from: params.from,
+    to: params.to.join(', '),
+    cc: params.cc?.join(', ') || undefined,
+    subject: params.subject,
+    text: params.text,
+    html: params.html || undefined,
+    messageId: `<${params.messageId}@${params.domain}>`,
+  });
+}
+
+async function sendEmail(params: {
+  from: string;
+  to: string[];
+  cc?: string[];
+  subject: string;
+  text: string;
+  html?: string;
+  messageId: string;
+  domain: string;
+}) {
+  if (config.emailProvider === 'resend' && config.resendApiKey) {
+    return sendViaResend(params);
+  }
+  return sendViaSmtp(params);
+}
 
 // GET /emails/:id
 emailRouter.get('/:id', authenticate, async (req: Request, res: Response) => {
@@ -75,16 +154,22 @@ emailRouter.post('/send', authenticate, async (req: Request, res: Response) => {
     throw new AppError(429, 'SEND_LIMIT', 'Daily send limit reached');
   }
 
-  // AI spam risk check
-  const spamRisk = await checkSpamRisk(data.subject, data.body, data.to);
-  if (spamRisk.risk_score > 80) {
-    throw new AppError(400, 'SPAM_DETECTED', 'Email flagged as potential spam');
+  // AI spam risk check (skip if no AI provider configured)
+  let spamRisk = { risk_score: 0, issues: [] as string[] };
+  try {
+    spamRisk = await checkSpamRisk(data.subject, data.body, data.to);
+    if (spamRisk.risk_score > 80) {
+      throw new AppError(400, 'SPAM_DETECTED', 'Email flagged as potential spam');
+    }
+  } catch (err: any) {
+    if (err instanceof AppError) throw err;
+    logger.warn('Spam check failed, allowing send', { error: err.message });
   }
 
   const inbox = inboxResult.rows[0];
   const fromAddress = `${inbox.address}@${inbox.domain}`;
 
-  // Queue for sending (in production, this goes through BullMQ)
+  // Store outbound email
   const emailId = crypto.randomUUID();
   await pool.query(
     `INSERT INTO emails (id, inbox_id, direction, from_address, to_addresses, subject, body_text, body_html, delivery_status)
@@ -92,11 +177,38 @@ emailRouter.post('/send', authenticate, async (req: Request, res: Response) => {
     [emailId, data.from_inbox_id, fromAddress, JSON.stringify(data.to.map(a => ({ address: a }))), data.subject, data.body, data.body_html || null],
   );
 
+  // Send via Resend or SMTP
+  try {
+    await sendEmail({
+      from: `Throwbox <${fromAddress}>`,
+      to: data.to,
+      cc: data.cc?.length ? data.cc : undefined,
+      subject: data.subject,
+      text: data.body,
+      html: data.body_html || undefined,
+      messageId: emailId,
+      domain: inbox.domain,
+    });
+
+    await pool.query(
+      `UPDATE emails SET delivery_status = 'sent', sent_at = NOW() WHERE id = $1`,
+      [emailId],
+    );
+
+    logger.info('Email sent', { emailId, provider: config.emailProvider, from: fromAddress, to: data.to });
+  } catch (sendError: any) {
+    logger.error('Email send failed', { emailId, provider: config.emailProvider, error: sendError.message });
+    await pool.query(
+      `UPDATE emails SET delivery_status = 'failed', bounce_reason = $2 WHERE id = $1`,
+      [emailId, sendError.message],
+    );
+  }
+
   res.status(202).json({
     success: true,
     data: {
       email_id: emailId,
-      status: 'queued',
+      status: 'sent',
       from: fromAddress,
       to: data.to,
       spam_risk: spamRisk,
