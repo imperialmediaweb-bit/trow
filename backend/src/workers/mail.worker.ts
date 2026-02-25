@@ -1,11 +1,36 @@
 import { Worker, Job, Queue } from 'bullmq';
 import { simpleParser } from 'mailparser';
+import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
 import { pool } from '../config/database.js';
 import { redis } from '../config/redis.js';
 import { logger } from '../config/logger.js';
 import { encrypt } from '../services/encryption.service.js';
 import { v4 as uuidv4 } from 'uuid';
+
+// ─── Email sender helper (Resend or SMTP) ───────────────────
+async function sendOutbound(params: { from: string; to: string; subject: string; text: string; html?: string }) {
+  if (process.env.EMAIL_PROVIDER === 'resend' && process.env.RESEND_API_KEY) {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const { error } = await resend.emails.send({
+      from: params.from,
+      to: [params.to],
+      subject: params.subject,
+      text: params.text,
+      html: params.html,
+    });
+    if (error) throw new Error(error.message);
+  } else {
+    const transport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'localhost',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: parseInt(process.env.SMTP_PORT || '587') === 465,
+      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+      tls: { rejectUnauthorized: false },
+    });
+    await transport.sendMail(params);
+  }
+}
 
 // ─── AI Analysis Queue ──────────────────────────────────────
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -128,48 +153,31 @@ const inboundWorker = new Worker(
     );
     const inbox = inboxData.rows[0];
 
+    // Forward email via Resend or SMTP
     if (inbox?.forwarding_to) {
       try {
-        const transport = nodemailer.createTransport({
-          host: process.env.SMTP_HOST || 'localhost',
-          port: parseInt(process.env.SMTP_PORT || '587'),
-          secure: parseInt(process.env.SMTP_PORT || '587') === 465,
-          auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-          tls: { rejectUnauthorized: false },
-        });
-
-        await transport.sendMail({
+        await sendOutbound({
           from: `Throwbox Forwarding <noreply@${domain}>`,
           to: inbox.forwarding_to,
           subject: `[Fwd] ${parsed.subject || '(no subject)'}`,
           text: `Forwarded from ${recipient}\nFrom: ${sender}\n\n${parsed.text || ''}`,
           html: parsed.html ? `<p><em>Forwarded from ${recipient} | From: ${sender}</em></p><hr>${parsed.html}` : undefined,
         });
-
         logger.info('Email forwarded', { emailId, forwardTo: inbox.forwarding_to });
       } catch (err) {
         logger.error('Email forwarding failed', { emailId, error: (err as Error).message });
       }
     }
 
-    // Send auto-reply if configured
+    // Send auto-reply
     if (inbox?.auto_reply_msg) {
       try {
-        const transport = nodemailer.createTransport({
-          host: process.env.SMTP_HOST || 'localhost',
-          port: parseInt(process.env.SMTP_PORT || '587'),
-          secure: parseInt(process.env.SMTP_PORT || '587') === 465,
-          auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-          tls: { rejectUnauthorized: false },
-        });
-
-        await transport.sendMail({
+        await sendOutbound({
           from: `Throwbox <${recipient}>`,
           to: sender,
           subject: `Re: ${parsed.subject || '(no subject)'}`,
           text: inbox.auto_reply_msg,
         });
-
         logger.info('Auto-reply sent', { emailId, to: sender });
       } catch (err) {
         logger.error('Auto-reply failed', { emailId, error: (err as Error).message });

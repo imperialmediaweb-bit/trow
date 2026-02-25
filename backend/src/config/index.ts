@@ -53,7 +53,11 @@ export const config = {
   // CORS
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173').split(','),
 
-  // SMTP (outbound)
+  // Email sending
+  emailProvider: process.env.EMAIL_PROVIDER || 'resend', // 'resend' or 'smtp'
+  resendApiKey: process.env.RESEND_API_KEY || '',
+
+  // SMTP (outbound fallback)
   smtpHost: process.env.SMTP_HOST || 'localhost',
   smtpPort: parseInt(process.env.SMTP_PORT || '587'),
   smtpUser: process.env.SMTP_USER || '',
