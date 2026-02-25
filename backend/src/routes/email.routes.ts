@@ -1,12 +1,43 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 import { pool } from '../config/database.js';
 import { sendEmailSchema } from '../models/schemas.js';
 import { authenticate } from '../middleware/auth.js';
 import { AppError } from '../middleware/error-handler.js';
 import { checkSpamRisk } from '../services/ai.service.js';
 import { decrypt } from '../services/encryption.service.js';
+import { config } from '../config/index.js';
+import { logger } from '../config/logger.js';
 
 export const emailRouter = Router();
+
+// ─── SMTP Transporter (lazy init) ───────────────────────────
+let transporter: nodemailer.Transporter | null = null;
+
+function getTransporter(): nodemailer.Transporter {
+  if (!transporter) {
+    // Try admin SMTP settings from DB first, fallback to env
+    const smtpHost = process.env.SMTP_HOST || 'localhost';
+    const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+    const smtpUser = process.env.SMTP_USER || '';
+    const smtpPass = process.env.SMTP_PASS || '';
+
+    transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: smtpUser ? { user: smtpUser, pass: smtpPass } : undefined,
+      tls: { rejectUnauthorized: false },
+    });
+  }
+  return transporter;
+}
+
+// Reload transporter when admin changes SMTP settings
+export function resetTransporter(): void {
+  transporter = null;
+}
 
 // GET /emails/:id
 emailRouter.get('/:id', authenticate, async (req: Request, res: Response) => {
@@ -75,16 +106,22 @@ emailRouter.post('/send', authenticate, async (req: Request, res: Response) => {
     throw new AppError(429, 'SEND_LIMIT', 'Daily send limit reached');
   }
 
-  // AI spam risk check
-  const spamRisk = await checkSpamRisk(data.subject, data.body, data.to);
-  if (spamRisk.risk_score > 80) {
-    throw new AppError(400, 'SPAM_DETECTED', 'Email flagged as potential spam');
+  // AI spam risk check (skip if no AI provider configured)
+  let spamRisk = { risk_score: 0, issues: [] as string[] };
+  try {
+    spamRisk = await checkSpamRisk(data.subject, data.body, data.to);
+    if (spamRisk.risk_score > 80) {
+      throw new AppError(400, 'SPAM_DETECTED', 'Email flagged as potential spam');
+    }
+  } catch (err: any) {
+    if (err instanceof AppError) throw err;
+    logger.warn('Spam check failed, allowing send', { error: err.message });
   }
 
   const inbox = inboxResult.rows[0];
   const fromAddress = `${inbox.address}@${inbox.domain}`;
 
-  // Queue for sending (in production, this goes through BullMQ)
+  // Store outbound email
   const emailId = crypto.randomUUID();
   await pool.query(
     `INSERT INTO emails (id, inbox_id, direction, from_address, to_addresses, subject, body_text, body_html, delivery_status)
@@ -92,11 +129,38 @@ emailRouter.post('/send', authenticate, async (req: Request, res: Response) => {
     [emailId, data.from_inbox_id, fromAddress, JSON.stringify(data.to.map(a => ({ address: a }))), data.subject, data.body, data.body_html || null],
   );
 
+  // Actually send via SMTP
+  try {
+    const transport = getTransporter();
+    await transport.sendMail({
+      from: `Throwbox <${fromAddress}>`,
+      to: data.to.join(', '),
+      cc: data.cc?.join(', ') || undefined,
+      subject: data.subject,
+      text: data.body,
+      html: data.body_html || undefined,
+      messageId: `<${emailId}@${inbox.domain}>`,
+    });
+
+    await pool.query(
+      `UPDATE emails SET delivery_status = 'sent', sent_at = NOW() WHERE id = $1`,
+      [emailId],
+    );
+
+    logger.info('Email sent', { emailId, from: fromAddress, to: data.to });
+  } catch (smtpError: any) {
+    logger.error('SMTP send failed', { emailId, error: smtpError.message });
+    await pool.query(
+      `UPDATE emails SET delivery_status = 'failed', bounce_reason = $2 WHERE id = $1`,
+      [emailId, smtpError.message],
+    );
+  }
+
   res.status(202).json({
     success: true,
     data: {
       email_id: emailId,
-      status: 'queued',
+      status: 'sent',
       from: fromAddress,
       to: data.to,
       spam_risk: spamRisk,

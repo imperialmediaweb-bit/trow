@@ -17,6 +17,11 @@ const routes = [
     component: () => import('../views/InboxDetailPage.vue'),
   },
   {
+    path: '/email/:id',
+    name: 'email-detail',
+    component: () => import('../views/EmailDetailPage.vue'),
+  },
+  {
     path: '/send',
     name: 'send',
     component: () => import('../views/SendPage.vue'),

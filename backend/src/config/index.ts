@@ -53,6 +53,15 @@ export const config = {
   // CORS
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173').split(','),
 
+  // SMTP (outbound)
+  smtpHost: process.env.SMTP_HOST || 'localhost',
+  smtpPort: parseInt(process.env.SMTP_PORT || '587'),
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+
+  // SMTP (inbound listener)
+  smtpListenPort: parseInt(process.env.SMTP_LISTEN_PORT || '2525'),
+
   // Mail
   mailDomains: (process.env.MAIL_DOMAINS || 'throwbox.net').split(','),
 

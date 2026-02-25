@@ -90,12 +90,47 @@ if (hasPublicDir) {
   });
 }
 
+// ─── Start Workers (in same process for Railway) ────────────
+async function startWorkers() {
+  try {
+    await import('./workers/cleanup.worker.js');
+    logger.info('Cleanup worker started');
+  } catch (err) {
+    logger.warn('Cleanup worker failed to start', { error: (err as Error).message });
+  }
+
+  try {
+    await import('./workers/mail.worker.js');
+    logger.info('Mail worker started');
+  } catch (err) {
+    logger.warn('Mail worker failed to start', { error: (err as Error).message });
+  }
+
+  try {
+    await import('./workers/ai.worker.js');
+    logger.info('AI worker started');
+  } catch (err) {
+    logger.warn('AI worker failed to start', { error: (err as Error).message });
+  }
+
+  // Start inbound SMTP server
+  if (process.env.ENABLE_SMTP_SERVER === 'true') {
+    try {
+      await import('./workers/smtp.server.js');
+      logger.info('Inbound SMTP server started');
+    } catch (err) {
+      logger.warn('SMTP server failed to start', { error: (err as Error).message });
+    }
+  }
+}
+
 // ─── Start ──────────────────────────────────────────────────
 const PORT = config.port;
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   logger.info(`Throwbox API running on port ${PORT}`);
   logger.info(`Environment: ${config.nodeEnv}`);
+  await startWorkers();
 });
 
 export { app, server, io };
