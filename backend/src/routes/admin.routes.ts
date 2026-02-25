@@ -592,3 +592,87 @@ adminRouter.get('/system/health', asyncHandler(async (_req: Request, res: Respon
     },
   });
 }));
+
+// ═══════════════════════════════════════════════════════════════
+// BILLING / SUBSCRIPTION MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+// GET /admin/billing/stats
+adminRouter.get('/billing/stats', asyncHandler(async (_req: Request, res: Response) => {
+  const [activeSubs, totalRevenue, planDist, recentInvoices] = await Promise.all([
+    pool.query("SELECT COUNT(*) FROM subscriptions WHERE status = 'active'"),
+    pool.query(`SELECT COALESCE(SUM(amount_cents), 0) as total FROM invoices WHERE status = 'paid'`).catch(() => ({ rows: [{ total: 0 }] })),
+    pool.query("SELECT plan, COUNT(*) as count FROM users WHERE deleted_at IS NULL GROUP BY plan ORDER BY count DESC"),
+    pool.query(`SELECT i.*, u.email FROM invoices i JOIN users u ON i.user_id = u.id ORDER BY i.created_at DESC LIMIT 20`).catch(() => ({ rows: [] })),
+  ]);
+
+  const activeCount = parseInt(activeSubs.rows[0].count);
+  const revenue = parseInt(totalRevenue.rows[0].total);
+
+  res.json({
+    success: true,
+    data: {
+      active_subscriptions: activeCount,
+      total_revenue_cents: revenue,
+      mrr_cents: activeCount > 0 ? Math.round(revenue / Math.max(1, activeCount)) : 0,
+      plan_distribution: planDist.rows,
+      recent_invoices: recentInvoices.rows,
+    },
+  });
+}));
+
+// GET /admin/billing/subscriptions
+adminRouter.get('/billing/subscriptions', asyncHandler(async (req: Request, res: Response) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = (page - 1) * limit;
+
+  const result = await pool.query(
+    `SELECT s.*, u.email, u.display_name, u.plan as current_plan
+     FROM subscriptions s
+     JOIN users u ON s.user_id = u.id
+     ORDER BY s.created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset],
+  );
+
+  res.json({ success: true, data: result.rows });
+}));
+
+// POST /admin/billing/assign
+adminRouter.post('/billing/assign', asyncHandler(async (req: Request, res: Response) => {
+  const { user_id, plan } = req.body;
+  const validPlans = ['free', 'pro', 'business', 'enterprise', 'api_basic', 'api_pro'];
+
+  if (!user_id || !plan) throw new AppError(400, 'MISSING_FIELDS', 'user_id and plan are required');
+  if (!validPlans.includes(plan)) throw new AppError(400, 'INVALID_PLAN', `Valid plans: ${validPlans.join(', ')}`);
+
+  // Update user plan
+  const userResult = await pool.query(
+    'UPDATE users SET plan = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL RETURNING id, email, plan',
+    [plan, user_id],
+  );
+
+  if (userResult.rowCount === 0) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
+
+  // Create or update subscription
+  if (plan !== 'free') {
+    const now = new Date();
+    const periodEnd = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+    await pool.query(
+      `INSERT INTO subscriptions (user_id, plan, status, current_period_start, current_period_end)
+       VALUES ($1, $2, 'active', $3, $4)
+       ON CONFLICT DO NOTHING`,
+      [user_id, plan, now, periodEnd],
+    );
+  } else {
+    await pool.query(
+      `UPDATE subscriptions SET status = 'cancelled', cancelled_at = NOW() WHERE user_id = $1 AND status = 'active'`,
+      [user_id],
+    );
+  }
+
+  logger.info('Admin assigned plan', { admin: req.user?.email, user_id, plan });
+
+  res.json({ success: true, data: userResult.rows[0] });
+}));

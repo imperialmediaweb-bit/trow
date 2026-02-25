@@ -19,6 +19,7 @@ import { privacyRouter } from './routes/privacy.routes.js';
 import { developerRouter } from './routes/developer.routes.js';
 import { billingRouter } from './routes/billing.routes.js';
 import { adminRouter } from './routes/admin.routes.js';
+import { blogRouter } from './routes/blog.routes.js';
 import { setupWebSocket } from './services/websocket.service.js';
 import { pool } from './config/database.js';
 
@@ -71,6 +72,7 @@ api.use('/privacy', privacyRouter);
 api.use('/developer', developerRouter);
 api.use('/billing', billingRouter);
 api.use('/admin', adminRouter);
+api.use('/blog', blogRouter);
 
 app.use('/api/v1', api);
 

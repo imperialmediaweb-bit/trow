@@ -15,6 +15,8 @@ const navItems = [
   { label: 'Analytics', path: '/admin/analytics', icon: 'C' },
   { label: 'Pages', path: '/admin/pages', icon: 'P' },
   { label: 'Notifications', path: '/admin/notifications', icon: 'N' },
+  { label: 'Blog', path: '/admin/blog', icon: 'B' },
+  { label: 'Billing', path: '/admin/billing', icon: '$' },
   { label: 'System', path: '/admin/system', icon: 'H' },
 ];
 

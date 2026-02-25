@@ -136,10 +136,11 @@ const navItems = [
           <div>
             <h4 class="text-sm font-semibold text-white uppercase tracking-wider mb-4">Company</h4>
             <ul class="space-y-3">
-              <li><router-link to="/pricing" class="text-sm hover:text-white transition-colors">About</router-link></li>
+              <li><router-link to="/about" class="text-sm hover:text-white transition-colors">About</router-link></li>
+              <li><router-link to="/blog" class="text-sm hover:text-white transition-colors">Blog</router-link></li>
+              <li><router-link to="/careers" class="text-sm hover:text-white transition-colors">Careers</router-link></li>
               <li><a href="mailto:press@throwbox.net" class="text-sm hover:text-white transition-colors">Press</a></li>
               <li><a href="mailto:enterprise@throwbox.net" class="text-sm hover:text-white transition-colors">Enterprise</a></li>
-              <li><a href="mailto:contact@throwbox.net" class="text-sm hover:text-white transition-colors">Contact</a></li>
             </ul>
           </div>
 
@@ -147,10 +148,11 @@ const navItems = [
           <div>
             <h4 class="text-sm font-semibold text-white uppercase tracking-wider mb-4">Legal</h4>
             <ul class="space-y-3">
-              <li><router-link to="/privacy" class="text-sm hover:text-white transition-colors">Privacy</router-link></li>
-              <li><a href="mailto:legal@throwbox.net" class="text-sm hover:text-white transition-colors">Terms of Service</a></li>
-              <li><a href="mailto:security@throwbox.net" class="text-sm hover:text-white transition-colors">Security</a></li>
-              <li><a href="mailto:abuse@throwbox.net" class="text-sm hover:text-white transition-colors">Report Abuse</a></li>
+              <li><router-link to="/privacy-policy" class="text-sm hover:text-white transition-colors">Privacy Policy</router-link></li>
+              <li><router-link to="/terms" class="text-sm hover:text-white transition-colors">Terms of Service</router-link></li>
+              <li><router-link to="/gdpr" class="text-sm hover:text-white transition-colors">GDPR</router-link></li>
+              <li><router-link to="/security" class="text-sm hover:text-white transition-colors">Security</router-link></li>
+              <li><router-link to="/report-abuse" class="text-sm hover:text-white transition-colors">Report Abuse</router-link></li>
             </ul>
           </div>
         </div>

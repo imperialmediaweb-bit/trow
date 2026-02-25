@@ -119,6 +119,65 @@ const routes = [
     component: () => import('../views/admin/AdminSystem.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
+  {
+    path: '/admin/blog',
+    name: 'admin-blog',
+    component: () => import('../views/admin/AdminBlog.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/billing',
+    name: 'admin-billing',
+    component: () => import('../views/admin/AdminBilling.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+
+  // ─── Static Content Pages ──────────────────────────────────
+  {
+    path: '/about',
+    name: 'about',
+    component: () => import('../views/AboutPage.vue'),
+  },
+  {
+    path: '/blog',
+    name: 'blog',
+    component: () => import('../views/BlogPage.vue'),
+  },
+  {
+    path: '/blog/:slug',
+    name: 'blog-post',
+    component: () => import('../views/BlogPostPage.vue'),
+  },
+  {
+    path: '/privacy-policy',
+    name: 'privacy-policy',
+    component: () => import('../views/PrivacyPolicyPage.vue'),
+  },
+  {
+    path: '/terms',
+    name: 'terms',
+    component: () => import('../views/TermsPage.vue'),
+  },
+  {
+    path: '/gdpr',
+    name: 'gdpr',
+    component: () => import('../views/GdprPage.vue'),
+  },
+  {
+    path: '/security',
+    name: 'security',
+    component: () => import('../views/SecurityPage.vue'),
+  },
+  {
+    path: '/careers',
+    name: 'careers',
+    component: () => import('../views/CareersPage.vue'),
+  },
+  {
+    path: '/report-abuse',
+    name: 'report-abuse',
+    component: () => import('../views/ReportAbusePage.vue'),
+  },
 
   // 404 catch-all
   {
