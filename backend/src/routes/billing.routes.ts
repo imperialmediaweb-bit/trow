@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/error-handler.js';
 
 export const billingRouter = Router();
 
@@ -89,7 +90,7 @@ billingRouter.get('/plans', (_req: Request, res: Response) => {
 });
 
 // GET /billing/subscription
-billingRouter.get('/subscription', authenticate, async (req: Request, res: Response) => {
+billingRouter.get('/subscription', authenticate, asyncHandler(async (req: Request, res: Response) => {
   // Placeholder - integrate with Stripe
   res.json({
     success: true,
@@ -98,12 +99,12 @@ billingRouter.get('/subscription', authenticate, async (req: Request, res: Respo
       status: 'active',
     },
   });
-});
+}));
 
 // POST /billing/subscribe - Placeholder for Stripe integration
-billingRouter.post('/subscribe', authenticate, async (_req: Request, res: Response) => {
+billingRouter.post('/subscribe', authenticate, asyncHandler(async (_req: Request, res: Response) => {
   res.json({
     success: true,
     data: { message: 'Stripe integration pending' },
   });
-});
+}));

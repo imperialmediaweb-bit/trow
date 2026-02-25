@@ -5,13 +5,13 @@ import { pool } from '../config/database.js';
 import { redis } from '../config/redis.js';
 import { createInboxSchema, updateInboxSchema } from '../models/schemas.js';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
-import { AppError } from '../middleware/error-handler.js';
+import { AppError, asyncHandler } from '../middleware/error-handler.js';
 import { config } from '../config/index.js';
 
 export const inboxRouter = Router();
 
 // POST /inboxes - Create temporary inbox
-inboxRouter.post('/', optionalAuth, async (req: Request, res: Response) => {
+inboxRouter.post('/', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
   const data = createInboxSchema.parse(req.body);
 
   const domain = data.domain || config.mailDomains[0];
@@ -95,10 +95,10 @@ inboxRouter.post('/', optionalAuth, async (req: Request, res: Response) => {
       created_at: inbox.created_at,
     },
   });
-});
+}));
 
 // GET /inboxes - List user's inboxes
-inboxRouter.get('/', authenticate, async (req: Request, res: Response) => {
+inboxRouter.get('/', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = Math.min(parseInt(req.query.limit as string) || 25, 100);
   const offset = (page - 1) * limit;
@@ -128,27 +128,27 @@ inboxRouter.get('/', authenticate, async (req: Request, res: Response) => {
     })),
     meta: { page, per_page: limit, total, total_pages: Math.ceil(total / limit) },
   });
-});
+}));
 
 // GET /inboxes/:id - Get inbox details
-inboxRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
+inboxRouter.get('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
   const inbox = await getInboxWithAuth(req.params.id, req);
 
   res.json({ success: true, data: inbox });
-});
+}));
 
 // DELETE /inboxes/:id
-inboxRouter.delete('/:id', optionalAuth, async (req: Request, res: Response) => {
+inboxRouter.delete('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
   await getInboxWithAuth(req.params.id, req);
 
   await pool.query('UPDATE inboxes SET is_active = false WHERE id = $1', [req.params.id]);
   await redis?.del(`inbox:${req.params.id}`);
 
   res.json({ success: true, data: { message: 'Inbox deleted' } });
-});
+}));
 
 // PATCH /inboxes/:id
-inboxRouter.patch('/:id', authenticate, async (req: Request, res: Response) => {
+inboxRouter.patch('/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const data = updateInboxSchema.parse(req.body);
   await getInboxWithAuth(req.params.id, req);
 
@@ -178,10 +178,10 @@ inboxRouter.patch('/:id', authenticate, async (req: Request, res: Response) => {
   }
 
   res.json({ success: true, data: { message: 'Updated' } });
-});
+}));
 
 // POST /inboxes/:id/extend
-inboxRouter.post('/:id/extend', authenticate, async (req: Request, res: Response) => {
+inboxRouter.post('/:id/extend', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const inbox = await getInboxWithAuth(req.params.id, req);
 
   const newExpiry = new Date(new Date(inbox.expires_at).getTime() + inbox.ttl_seconds * 1000);
@@ -192,10 +192,10 @@ inboxRouter.post('/:id/extend', authenticate, async (req: Request, res: Response
   );
 
   res.json({ success: true, data: { expires_at: newExpiry } });
-});
+}));
 
 // GET /inboxes/:id/emails
-inboxRouter.get('/:id/emails', optionalAuth, async (req: Request, res: Response) => {
+inboxRouter.get('/:id/emails', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
   await getInboxWithAuth(req.params.id, req);
 
   const page = parseInt(req.query.page as string) || 1;
@@ -212,7 +212,7 @@ inboxRouter.get('/:id/emails', optionalAuth, async (req: Request, res: Response)
   );
 
   res.json({ success: true, data: result.rows });
-});
+}));
 
 // ─── Helpers ────────────────────────────────────────────────
 

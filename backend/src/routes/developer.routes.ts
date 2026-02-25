@@ -2,24 +2,24 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { pool } from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
-import { AppError } from '../middleware/error-handler.js';
+import { AppError, asyncHandler } from '../middleware/error-handler.js';
 import { createApiKeySchema, createWebhookSchema } from '../models/schemas.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export const developerRouter = Router();
 
 // GET /developer/api-keys
-developerRouter.get('/api-keys', authenticate, async (req: Request, res: Response) => {
+developerRouter.get('/api-keys', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     `SELECT id, name, key_prefix, scopes, rate_limit, last_used_at, expires_at, is_active, created_at
      FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC`,
     [req.user!.userId],
   );
   res.json({ success: true, data: result.rows });
-});
+}));
 
 // POST /developer/api-keys
-developerRouter.post('/api-keys', authenticate, async (req: Request, res: Response) => {
+developerRouter.post('/api-keys', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const data = createApiKeySchema.parse(req.body);
 
   const rawKey = `tb_live_${crypto.randomBytes(32).toString('hex')}`;
@@ -50,10 +50,10 @@ developerRouter.post('/api-keys', authenticate, async (req: Request, res: Respon
       warning: 'Save this key now. It will not be shown again.',
     },
   });
-});
+}));
 
 // DELETE /developer/api-keys/:id
-developerRouter.delete('/api-keys/:id', authenticate, async (req: Request, res: Response) => {
+developerRouter.delete('/api-keys/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     'UPDATE api_keys SET is_active = false WHERE id = $1 AND user_id = $2 RETURNING id',
     [req.params.id, req.user!.userId],
@@ -64,20 +64,20 @@ developerRouter.delete('/api-keys/:id', authenticate, async (req: Request, res: 
   }
 
   res.json({ success: true, data: { message: 'API key revoked' } });
-});
+}));
 
 // GET /developer/webhooks
-developerRouter.get('/webhooks', authenticate, async (req: Request, res: Response) => {
+developerRouter.get('/webhooks', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     `SELECT id, url, events, is_active, failure_count, last_triggered, last_status, created_at
      FROM webhooks WHERE user_id = $1 ORDER BY created_at DESC`,
     [req.user!.userId],
   );
   res.json({ success: true, data: result.rows });
-});
+}));
 
 // POST /developer/webhooks
-developerRouter.post('/webhooks', authenticate, async (req: Request, res: Response) => {
+developerRouter.post('/webhooks', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const data = createWebhookSchema.parse(req.body);
 
   const secret = `whsec_${crypto.randomBytes(24).toString('hex')}`;
@@ -93,10 +93,10 @@ developerRouter.post('/webhooks', authenticate, async (req: Request, res: Respon
     success: true,
     data: { id, url: data.url, secret, events: data.events },
   });
-});
+}));
 
 // DELETE /developer/webhooks/:id
-developerRouter.delete('/webhooks/:id', authenticate, async (req: Request, res: Response) => {
+developerRouter.delete('/webhooks/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     'DELETE FROM webhooks WHERE id = $1 AND user_id = $2 RETURNING id',
     [req.params.id, req.user!.userId],
@@ -107,10 +107,10 @@ developerRouter.delete('/webhooks/:id', authenticate, async (req: Request, res: 
   }
 
   res.json({ success: true, data: { message: 'Webhook deleted' } });
-});
+}));
 
 // GET /developer/usage
-developerRouter.get('/usage', authenticate, async (req: Request, res: Response) => {
+developerRouter.get('/usage', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const inboxes = await pool.query(
     'SELECT COUNT(*) FROM inboxes WHERE user_id = $1 AND is_active = true',
     [req.user!.userId],
@@ -137,4 +137,4 @@ developerRouter.get('/usage', authenticate, async (req: Request, res: Response) 
       ai_calls_today: parseInt(aiCallsToday.rows[0].count),
     },
   });
-});
+}));

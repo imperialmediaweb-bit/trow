@@ -162,14 +162,35 @@ async function startWorkers() {
   }
 }
 
+// ─── Global Error Handlers (prevent crashes) ────────────────
+process.on('unhandledRejection', (reason: any) => {
+  logger.error('Unhandled promise rejection', { error: reason?.message || reason });
+});
+
+process.on('uncaughtException', (err: Error) => {
+  logger.error('Uncaught exception', { error: err.message, stack: err.stack });
+});
+
 // ─── Start ──────────────────────────────────────────────────
 const PORT = config.port;
+
+server.on('error', (err: any) => {
+  logger.error('Server error', { error: err.message, code: err.code });
+});
 
 server.listen(PORT, async () => {
   logger.info(`Throwbox API running on port ${PORT}`);
   logger.info(`Environment: ${config.nodeEnv}`);
-  await runMigrations();
-  await startWorkers();
+  try {
+    await runMigrations();
+  } catch (err) {
+    logger.error('Migration startup error', { error: (err as Error).message });
+  }
+  try {
+    await startWorkers();
+  } catch (err) {
+    logger.error('Worker startup error', { error: (err as Error).message });
+  }
 });
 
 export { app, server, io };
