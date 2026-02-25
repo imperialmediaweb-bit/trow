@@ -349,4 +349,15 @@ VALUES (
   true
 );
 
+-- ─── Demo Premium User (password: demo2025) ──
+INSERT INTO users (email, password_hash, display_name, role, plan, email_verified)
+VALUES (
+  'demo@throwbox.net',
+  '$2a$12$R9rzESk/FpR0H.d9xEotKutw8a1KbErxQH6fuAA/kezl3vWGxjRTW',
+  'Demo User',
+  'user',
+  'business',
+  true
+);
+
 COMMIT;
