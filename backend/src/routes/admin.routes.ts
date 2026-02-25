@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../config/database.js';
 import { redis } from '../config/redis.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
-import { AppError } from '../middleware/error-handler.js';
+import { AppError, asyncHandler } from '../middleware/error-handler.js';
 import { logger } from '../config/logger.js';
 
 export const adminRouter = Router();
@@ -15,7 +15,7 @@ adminRouter.use(authenticate, requireRole('admin', 'superadmin'));
 // ═══════════════════════════════════════════════════════════════
 
 // GET /admin/stats
-adminRouter.get('/stats', async (_req: Request, res: Response) => {
+adminRouter.get('/stats', asyncHandler(async (_req: Request, res: Response) => {
   const [users, inboxes, emails, activeInboxes, proUsers, todaySignups, todayEmails] = await Promise.all([
     pool.query('SELECT COUNT(*) FROM users WHERE deleted_at IS NULL'),
     pool.query('SELECT COUNT(*) FROM inboxes'),
@@ -38,10 +38,10 @@ adminRouter.get('/stats', async (_req: Request, res: Response) => {
       today_emails: parseInt(todayEmails.rows[0].count),
     },
   });
-});
+}));
 
 // GET /admin/analytics
-adminRouter.get('/analytics', async (req: Request, res: Response) => {
+adminRouter.get('/analytics', asyncHandler(async (req: Request, res: Response) => {
   const days = Math.min(parseInt(req.query.days as string) || 30, 90);
 
   const [signupsByDay, emailsByDay, planDistribution, topDomains] = await Promise.all([
@@ -75,14 +75,14 @@ adminRouter.get('/analytics', async (req: Request, res: Response) => {
       top_domains: topDomains.rows,
     },
   });
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // USER MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
 // GET /admin/users
-adminRouter.get('/users', async (req: Request, res: Response) => {
+adminRouter.get('/users', asyncHandler(async (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
   const offset = (page - 1) * limit;
@@ -128,10 +128,10 @@ adminRouter.get('/users', async (req: Request, res: Response) => {
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     },
   });
-});
+}));
 
 // GET /admin/users/:id
-adminRouter.get('/users/:id', async (req: Request, res: Response) => {
+adminRouter.get('/users/:id', asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     `SELECT id, email, display_name, role, plan, locale, timezone, created_at, last_login_at, last_login_ip, is_banned
      FROM users WHERE id = $1 AND deleted_at IS NULL`,
@@ -157,10 +157,10 @@ adminRouter.get('/users/:id', async (req: Request, res: Response) => {
       },
     },
   });
-});
+}));
 
 // PUT /admin/users/:id
-adminRouter.put('/users/:id', async (req: Request, res: Response) => {
+adminRouter.put('/users/:id', asyncHandler(async (req: Request, res: Response) => {
   const { role, plan, display_name, is_banned } = req.body;
   const fields: string[] = [];
   const values: any[] = [];
@@ -187,10 +187,10 @@ adminRouter.put('/users/:id', async (req: Request, res: Response) => {
   }
 
   res.json({ success: true, data: result.rows[0] });
-});
+}));
 
 // DELETE /admin/users/:id (soft delete)
-adminRouter.delete('/users/:id', async (req: Request, res: Response) => {
+adminRouter.delete('/users/:id', asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     'UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id',
     [req.params.id],
@@ -201,14 +201,14 @@ adminRouter.delete('/users/:id', async (req: Request, res: Response) => {
   }
 
   res.json({ success: true, data: { message: 'User deleted' } });
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // SITE SETTINGS (key-value store in DB)
 // ═══════════════════════════════════════════════════════════════
 
 // GET /admin/settings
-adminRouter.get('/settings', async (_req: Request, res: Response) => {
+adminRouter.get('/settings', asyncHandler(async (_req: Request, res: Response) => {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS site_settings (
       key VARCHAR(255) PRIMARY KEY,
@@ -279,10 +279,10 @@ adminRouter.get('/settings', async (_req: Request, res: Response) => {
       },
     },
   });
-});
+}));
 
 // PUT /admin/settings/:section
-adminRouter.put('/settings/:section', async (req: Request, res: Response) => {
+adminRouter.put('/settings/:section', asyncHandler(async (req: Request, res: Response) => {
   const validSections = ['homepage', 'branding', 'general', 'smtp', 'llm', 'notifications'];
   const { section } = req.params;
 
@@ -308,14 +308,14 @@ adminRouter.put('/settings/:section', async (req: Request, res: Response) => {
   logger.info(`Admin settings updated: ${section}`, { admin: req.user?.email });
 
   res.json({ success: true, data: { section, value: req.body } });
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // SMTP TEST
 // ═══════════════════════════════════════════════════════════════
 
 // POST /admin/smtp/test
-adminRouter.post('/smtp/test', async (req: Request, res: Response) => {
+adminRouter.post('/smtp/test', asyncHandler(async (req: Request, res: Response) => {
   const { provider, host, port, secure, username, password, from_email, test_to, resend_api_key } = req.body;
 
   if (!test_to) {
@@ -362,14 +362,14 @@ adminRouter.post('/smtp/test', async (req: Request, res: Response) => {
       error: { code: 'EMAIL_ERROR', message: (err as Error).message },
     });
   }
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // LLM TEST
 // ═══════════════════════════════════════════════════════════════
 
 // POST /admin/llm/test
-adminRouter.post('/llm/test', async (req: Request, res: Response) => {
+adminRouter.post('/llm/test', asyncHandler(async (req: Request, res: Response) => {
   const { provider, api_key, model } = req.body;
 
   try {
@@ -406,14 +406,14 @@ adminRouter.post('/llm/test', async (req: Request, res: Response) => {
       error: { code: 'LLM_ERROR', message: (err as Error).message },
     });
   }
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // PAGE MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
 // GET /admin/pages
-adminRouter.get('/pages', async (_req: Request, res: Response) => {
+adminRouter.get('/pages', asyncHandler(async (_req: Request, res: Response) => {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS pages (
       id VARCHAR(100) PRIMARY KEY,
@@ -430,10 +430,10 @@ adminRouter.get('/pages', async (_req: Request, res: Response) => {
 
   const result = await pool.query('SELECT * FROM pages ORDER BY created_at DESC');
   res.json({ success: true, data: result.rows });
-});
+}));
 
 // POST /admin/pages
-adminRouter.post('/pages', async (req: Request, res: Response) => {
+adminRouter.post('/pages', asyncHandler(async (req: Request, res: Response) => {
   const { title, slug, content, is_published, meta_title, meta_description } = req.body;
   const id = slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
@@ -445,10 +445,10 @@ adminRouter.post('/pages', async (req: Request, res: Response) => {
   );
 
   res.status(201).json({ success: true, data: result.rows[0] });
-});
+}));
 
 // PUT /admin/pages/:id
-adminRouter.put('/pages/:id', async (req: Request, res: Response) => {
+adminRouter.put('/pages/:id', asyncHandler(async (req: Request, res: Response) => {
   const { title, content, is_published, meta_title, meta_description } = req.body;
 
   const result = await pool.query(
@@ -464,10 +464,10 @@ adminRouter.put('/pages/:id', async (req: Request, res: Response) => {
   }
 
   res.json({ success: true, data: result.rows[0] });
-});
+}));
 
 // DELETE /admin/pages/:id
-adminRouter.delete('/pages/:id', async (req: Request, res: Response) => {
+adminRouter.delete('/pages/:id', asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query('DELETE FROM pages WHERE id = $1 RETURNING id', [req.params.id]);
 
   if (result.rowCount === 0) {
@@ -475,14 +475,14 @@ adminRouter.delete('/pages/:id', async (req: Request, res: Response) => {
   }
 
   res.json({ success: true, data: { message: 'Page deleted' } });
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // NOTIFICATION MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
 // POST /admin/notifications/send
-adminRouter.post('/notifications/send', async (req: Request, res: Response) => {
+adminRouter.post('/notifications/send', asyncHandler(async (req: Request, res: Response) => {
   const { subject, body, target, user_ids } = req.body;
 
   let recipients: { email: string }[];
@@ -518,14 +518,14 @@ adminRouter.post('/notifications/send', async (req: Request, res: Response) => {
       recipient_count: recipients.length,
     },
   });
-});
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // SYSTEM HEALTH
 // ═══════════════════════════════════════════════════════════════
 
 // GET /admin/system/health
-adminRouter.get('/system/health', async (_req: Request, res: Response) => {
+adminRouter.get('/system/health', asyncHandler(async (_req: Request, res: Response) => {
   const checks: Record<string, any> = {};
 
   try {
@@ -555,4 +555,4 @@ adminRouter.get('/system/health', async (_req: Request, res: Response) => {
       memory: process.memoryUsage(),
     },
   });
-});
+}));

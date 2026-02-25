@@ -1,6 +1,15 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { logger } from '../config/logger.js';
+
+// Wrap async route handlers so rejected promises are forwarded to Express error handler
+export function asyncHandler(
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<any>,
+): RequestHandler {
+  return (req, res, next) => {
+    fn(req, res, next).catch(next);
+  };
+}
 
 export class AppError extends Error {
   constructor(

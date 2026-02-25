@@ -5,7 +5,7 @@ import nodemailer from 'nodemailer';
 import { pool } from '../config/database.js';
 import { sendEmailSchema } from '../models/schemas.js';
 import { authenticate } from '../middleware/auth.js';
-import { AppError } from '../middleware/error-handler.js';
+import { AppError, asyncHandler } from '../middleware/error-handler.js';
 import { checkSpamRisk } from '../services/ai.service.js';
 import { decrypt } from '../services/encryption.service.js';
 import { config } from '../config/index.js';
@@ -88,7 +88,7 @@ async function sendEmail(params: {
 }
 
 // GET /emails/:id
-emailRouter.get('/:id', authenticate, async (req: Request, res: Response) => {
+emailRouter.get('/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     `SELECT e.*, a.summary, a.otp_codes, a.phishing_score, a.priority, a.categories
      FROM emails e
@@ -118,10 +118,10 @@ emailRouter.get('/:id', authenticate, async (req: Request, res: Response) => {
   }
 
   res.json({ success: true, data: email });
-});
+}));
 
 // POST /emails/send
-emailRouter.post('/send', authenticate, async (req: Request, res: Response) => {
+emailRouter.post('/send', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const data = sendEmailSchema.parse(req.body);
 
   // Verify inbox ownership
@@ -214,10 +214,10 @@ emailRouter.post('/send', authenticate, async (req: Request, res: Response) => {
       spam_risk: spamRisk,
     },
   });
-});
+}));
 
 // GET /emails/sent
-emailRouter.get('/sent/list', authenticate, async (req: Request, res: Response) => {
+emailRouter.get('/sent/list', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     `SELECT e.id, e.from_address, e.to_addresses, e.subject, e.delivery_status, e.sent_at, e.created_at
      FROM emails e
@@ -229,10 +229,10 @@ emailRouter.get('/sent/list', authenticate, async (req: Request, res: Response) 
   );
 
   res.json({ success: true, data: result.rows });
-});
+}));
 
 // DELETE /emails/:id
-emailRouter.delete('/:id', authenticate, async (req: Request, res: Response) => {
+emailRouter.delete('/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     `DELETE FROM emails e
      USING inboxes i
@@ -246,4 +246,4 @@ emailRouter.delete('/:id', authenticate, async (req: Request, res: Response) => 
   }
 
   res.json({ success: true, data: { message: 'Email deleted' } });
-});
+}));

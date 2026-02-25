@@ -7,12 +7,12 @@ import { pool } from '../config/database.js';
 import { redis } from '../config/redis.js';
 import { registerSchema, loginSchema } from '../models/schemas.js';
 import { authenticate } from '../middleware/auth.js';
-import { AppError } from '../middleware/error-handler.js';
+import { AppError, asyncHandler } from '../middleware/error-handler.js';
 
 export const authRouter = Router();
 
 // POST /auth/register
-authRouter.post('/register', async (req: Request, res: Response) => {
+authRouter.post('/register', asyncHandler(async (req: Request, res: Response) => {
   const data = registerSchema.parse(req.body);
   const passwordHash = await bcrypt.hash(data.password, 12);
   const id = uuidv4();
@@ -36,10 +36,10 @@ authRouter.post('/register', async (req: Request, res: Response) => {
     success: true,
     data: { user, ...tokens },
   });
-});
+}));
 
 // POST /auth/login
-authRouter.post('/login', async (req: Request, res: Response) => {
+authRouter.post('/login', asyncHandler(async (req: Request, res: Response) => {
   const data = loginSchema.parse(req.body);
 
   const result = await pool.query(
@@ -72,10 +72,10 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       ...tokens,
     },
   });
-});
+}));
 
 // POST /auth/refresh
-authRouter.post('/refresh', async (req: Request, res: Response) => {
+authRouter.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
   const { refresh_token } = req.body;
 
   if (!refresh_token) {
@@ -107,25 +107,25 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
   } catch {
     throw new AppError(401, 'TOKEN_INVALID', 'Invalid refresh token');
   }
-});
+}));
 
 // POST /auth/logout
-authRouter.post('/logout', authenticate, async (req: Request, res: Response) => {
+authRouter.post('/logout', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const token = req.headers.authorization?.slice(7);
   if (token) {
     await redis?.set(`blacklist:${token}`, '1', 'EX', 900); // 15 min JWT TTL
   }
   res.json({ success: true, data: { message: 'Logged out' } });
-});
+}));
 
 // GET /auth/me
-authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
+authRouter.get('/me', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     'SELECT id, email, display_name, role, plan, locale, timezone, created_at FROM users WHERE id = $1',
     [req.user!.userId],
   );
   res.json({ success: true, data: result.rows[0] });
-});
+}));
 
 // ─── Helpers ────────────────────────────────────────────────
 

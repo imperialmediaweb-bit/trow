@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../config/database.js';
 import { authenticate, requirePlan } from '../middleware/auth.js';
-import { AppError } from '../middleware/error-handler.js';
+import { AppError, asyncHandler } from '../middleware/error-handler.js';
 import { createAliasSchema, leakCheckSchema } from '../models/schemas.js';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
@@ -10,7 +10,7 @@ import { config } from '../config/index.js';
 export const privacyRouter = Router();
 
 // GET /privacy/aliases
-privacyRouter.get('/aliases', authenticate, async (req: Request, res: Response) => {
+privacyRouter.get('/aliases', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     `SELECT a.id, a.alias_address, d.domain, a.forward_to, a.label, a.is_active, a.emails_received, a.emails_blocked, a.created_at
      FROM aliases a JOIN domains d ON a.domain_id = d.id
@@ -20,10 +20,10 @@ privacyRouter.get('/aliases', authenticate, async (req: Request, res: Response) 
   );
 
   res.json({ success: true, data: result.rows });
-});
+}));
 
 // POST /privacy/aliases
-privacyRouter.post('/aliases', authenticate, requirePlan('pro', 'business', 'enterprise'), async (req: Request, res: Response) => {
+privacyRouter.post('/aliases', authenticate, requirePlan('pro', 'business', 'enterprise'), asyncHandler(async (req: Request, res: Response) => {
   const data = createAliasSchema.parse(req.body);
 
   const domain = data.domain || config.mailDomains[0];
@@ -54,10 +54,10 @@ privacyRouter.post('/aliases', authenticate, requirePlan('pro', 'business', 'ent
       label: data.label,
     },
   });
-});
+}));
 
 // DELETE /privacy/aliases/:id
-privacyRouter.delete('/aliases/:id', authenticate, async (req: Request, res: Response) => {
+privacyRouter.delete('/aliases/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const result = await pool.query(
     'DELETE FROM aliases WHERE id = $1 AND user_id = $2 RETURNING id',
     [req.params.id, req.user!.userId],
@@ -68,10 +68,10 @@ privacyRouter.delete('/aliases/:id', authenticate, async (req: Request, res: Res
   }
 
   res.json({ success: true, data: { message: 'Alias deleted' } });
-});
+}));
 
 // POST /privacy/leak-check
-privacyRouter.post('/leak-check', authenticate, async (req: Request, res: Response) => {
+privacyRouter.post('/leak-check', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const data = leakCheckSchema.parse(req.body);
 
   // In production, integrate with HIBP API or similar service
@@ -92,10 +92,10 @@ privacyRouter.post('/leak-check', authenticate, async (req: Request, res: Respon
       checked_at: new Date().toISOString(),
     },
   });
-});
+}));
 
 // GET /privacy/score
-privacyRouter.get('/score', authenticate, async (req: Request, res: Response) => {
+privacyRouter.get('/score', authenticate, asyncHandler(async (req: Request, res: Response) => {
   // Calculate privacy score based on user's usage
   const aliasCount = await pool.query(
     'SELECT COUNT(*) FROM aliases WHERE user_id = $1 AND is_active = true',
@@ -132,4 +132,4 @@ privacyRouter.get('/score', authenticate, async (req: Request, res: Response) =>
       ],
     },
   });
-});
+}));

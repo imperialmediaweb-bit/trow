@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../config/database.js';
 import { authenticate, requirePlan } from '../middleware/auth.js';
-import { AppError } from '../middleware/error-handler.js';
+import { AppError, asyncHandler } from '../middleware/error-handler.js';
 import { aiComposeSchema, aiSummarizeSchema } from '../models/schemas.js';
 import * as aiService from '../services/ai.service.js';
 import { decrypt } from '../services/encryption.service.js';
@@ -9,7 +9,7 @@ import { decrypt } from '../services/encryption.service.js';
 export const aiRouter = Router();
 
 // POST /ai/summarize
-aiRouter.post('/summarize', authenticate, async (req: Request, res: Response) => {
+aiRouter.post('/summarize', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const data = aiSummarizeSchema.parse(req.body);
 
   const result = await pool.query(
@@ -50,10 +50,10 @@ aiRouter.post('/summarize', authenticate, async (req: Request, res: Response) =>
   );
 
   res.json({ success: true, data: analysis });
-});
+}));
 
 // POST /ai/extract-otp
-aiRouter.post('/extract-otp', authenticate, async (req: Request, res: Response) => {
+aiRouter.post('/extract-otp', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const { email_id } = req.body;
 
   const result = await pool.query(
@@ -83,10 +83,10 @@ aiRouter.post('/extract-otp', authenticate, async (req: Request, res: Response) 
       otp_codes: analysis.otp_codes.length > 0 ? analysis.otp_codes : regexCodes.map(c => ({ code: c, type: 'numeric' })),
     },
   });
-});
+}));
 
 // POST /ai/phishing-check
-aiRouter.post('/phishing-check', authenticate, async (req: Request, res: Response) => {
+aiRouter.post('/phishing-check', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const { email_id } = req.body;
 
   const result = await pool.query(
@@ -117,10 +117,10 @@ aiRouter.post('/phishing-check', authenticate, async (req: Request, res: Respons
       recommendation: analysis.phishing_score > 70 ? 'high_risk' : analysis.phishing_score > 40 ? 'medium_risk' : 'low_risk',
     },
   });
-});
+}));
 
 // POST /ai/compose
-aiRouter.post('/compose', authenticate, requirePlan('pro', 'business', 'enterprise'), async (req: Request, res: Response) => {
+aiRouter.post('/compose', authenticate, requirePlan('pro', 'business', 'enterprise'), asyncHandler(async (req: Request, res: Response) => {
   const data = aiComposeSchema.parse(req.body);
 
   let context: string | undefined;
@@ -142,22 +142,22 @@ aiRouter.post('/compose', authenticate, requirePlan('pro', 'business', 'enterpri
   );
 
   res.json({ success: true, data: composed });
-});
+}));
 
 // POST /ai/grammar
-aiRouter.post('/grammar', authenticate, requirePlan('pro', 'business', 'enterprise'), async (req: Request, res: Response) => {
+aiRouter.post('/grammar', authenticate, requirePlan('pro', 'business', 'enterprise'), asyncHandler(async (req: Request, res: Response) => {
   const { text } = req.body;
   if (!text) throw new AppError(400, 'MISSING_TEXT', 'Text is required');
 
   const corrected = await aiService.correctGrammar(text);
   res.json({ success: true, data: { original: text, corrected } });
-});
+}));
 
 // POST /ai/tone-adjust
-aiRouter.post('/tone-adjust', authenticate, requirePlan('pro', 'business', 'enterprise'), async (req: Request, res: Response) => {
+aiRouter.post('/tone-adjust', authenticate, requirePlan('pro', 'business', 'enterprise'), asyncHandler(async (req: Request, res: Response) => {
   const { text, tone } = req.body;
   if (!text || !tone) throw new AppError(400, 'MISSING_FIELDS', 'Text and tone are required');
 
   const adjusted = await aiService.adjustTone(text, tone);
   res.json({ success: true, data: { original: text, adjusted, tone } });
-});
+}));
