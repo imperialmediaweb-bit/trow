@@ -51,7 +51,7 @@ export const config = {
   s3Region: process.env.S3_REGION || 'us-east-1',
 
   // CORS
-  corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173').split(','),
+  corsOrigins: (process.env.CORS_ORIGINS || 'https://www.throwbox.net,https://throwbox.net,http://localhost:5173').split(','),
 
   // Email sending
   emailProvider: process.env.EMAIL_PROVIDER || 'resend', // 'resend' or 'smtp'
