@@ -111,13 +111,31 @@ function copyOtp(code: string) {
   navigator.clipboard.writeText(code);
 }
 
+function sanitizeHtml(html: string): string {
+  // Remove script tags and event handlers
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/on\w+\s*=\s*[^\s>]*/gi, '')
+    .replace(/javascript\s*:/gi, 'blocked:')
+    .replace(/<iframe\b[^>]*>/gi, '')
+    .replace(/<object\b[^>]*>/gi, '')
+    .replace(/<embed\b[^>]*>/gi, '')
+    .replace(/<form\b[^>]*>/gi, '');
+}
+
+const sanitizedHtml = computed(() => {
+  if (!email.value?.body_html) return '';
+  return sanitizeHtml(email.value.body_html);
+});
+
 const securityBadge = computed(() => {
   if (!email.value) return null;
   const spf = email.value.spf_result;
   const dkim = email.value.dkim_result;
-  if (spf === 'pass' && dkim === 'pass') return { label: 'Verified', color: 'green' };
-  if (spf === 'pass' || dkim === 'pass') return { label: 'Partial', color: 'yellow' };
-  return { label: 'Unverified', color: 'red' };
+  if (spf === 'pass' && dkim === 'pass') return { label: 'Verified', classes: 'bg-green-100 text-green-700' };
+  if (spf === 'pass' || dkim === 'pass') return { label: 'Partial', classes: 'bg-yellow-100 text-yellow-700' };
+  return { label: 'Unverified', classes: 'bg-red-100 text-red-700' };
 });
 
 onMounted(fetchEmail);
@@ -144,7 +162,7 @@ onMounted(fetchEmail);
           </div>
           <div class="flex items-center gap-2">
             <span v-if="securityBadge" class="text-xs px-2 py-1 rounded-full"
-              :class="`bg-${securityBadge.color}-100 text-${securityBadge.color}-700`">
+              :class="securityBadge.classes">
               {{ securityBadge.label }}
             </span>
             <span v-if="email.priority" class="text-xs px-2 py-1 rounded-full capitalize"
@@ -214,7 +232,7 @@ onMounted(fetchEmail);
             class="px-4 py-2 text-sm font-medium" v-if="email.body_html">HTML</button>
         </div>
         <div class="p-6">
-          <div v-if="showHtml && email.body_html" v-html="email.body_html" class="prose dark:prose-invert max-w-none email-html"></div>
+          <div v-if="showHtml && email.body_html" v-html="sanitizedHtml" class="prose dark:prose-invert max-w-none email-html"></div>
           <pre v-else class="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-sans">{{ email.body_text || email.body_preview || '(empty)' }}</pre>
         </div>
       </div>

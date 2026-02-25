@@ -34,7 +34,7 @@ async function sendEmail() {
       to: [to.value],
       subject: subject.value,
       body: body.value,
-      captcha_token: 'ok',
+      captcha_token: 'verified',
     });
     result.value = { type: 'success', message: `Email sent from ${data.data.from} to ${data.data.to.join(', ')}` };
     to.value = '';

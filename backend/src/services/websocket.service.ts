@@ -4,7 +4,14 @@ import { config } from '../config/index.js';
 import { logger } from '../config/logger.js';
 import { redis } from '../config/redis.js';
 
+let ioInstance: SocketServer | null = null;
+
+export function getIO(): SocketServer | null {
+  return ioInstance;
+}
+
 export function setupWebSocket(io: SocketServer): void {
+  ioInstance = io;
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
     if (token) {
@@ -36,6 +43,13 @@ export function setupWebSocket(io: SocketServer): void {
 
     socket.on('disconnect', async () => {
       logger.debug('WebSocket disconnected', { id: socket.id });
+      // Clean up Redis subscriber records for all rooms this socket was in
+      for (const room of socket.rooms) {
+        if (room.startsWith('inbox:')) {
+          const inboxId = room.replace('inbox:', '');
+          await redis?.srem(`ws:inbox:${inboxId}:subscribers`, socket.id);
+        }
+      }
     });
   });
 }

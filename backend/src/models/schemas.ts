@@ -43,7 +43,7 @@ export const sendEmailSchema = z.object({
   body: z.string().max(50000),
   body_html: z.string().max(100000).optional(),
   attachments: z.array(z.string()).max(5).default([]),
-  captcha_token: z.string(),
+  captcha_token: z.string().optional(),
 });
 
 // ─── AI Schemas ─────────────────────────────────────────────

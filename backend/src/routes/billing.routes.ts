@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { pool } from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error-handler.js';
 
@@ -101,10 +102,27 @@ billingRouter.get('/subscription', authenticate, asyncHandler(async (req: Reques
   });
 }));
 
-// POST /billing/subscribe - Placeholder for Stripe integration
-billingRouter.post('/subscribe', authenticate, asyncHandler(async (_req: Request, res: Response) => {
+// POST /billing/subscribe
+billingRouter.post('/subscribe', authenticate, asyncHandler(async (req: Request, res: Response) => {
+  const { plan } = req.body;
+  const validPlans = ['free', 'pro', 'business', 'enterprise', 'api_basic', 'api_pro'];
+
+  if (!plan || !validPlans.includes(plan)) {
+    res.status(400).json({ success: false, error: { code: 'INVALID_PLAN', message: `Valid plans: ${validPlans.join(', ')}` } });
+    return;
+  }
+
+  // Update user plan (Stripe checkout integration pending)
+  await pool.query(
+    'UPDATE users SET plan = $1, updated_at = NOW() WHERE id = $2',
+    [plan, req.user!.userId],
+  );
+
   res.json({
     success: true,
-    data: { message: 'Stripe integration pending' },
+    data: {
+      plan,
+      message: plan === 'free' ? 'Downgraded to free plan' : `Upgraded to ${plan} plan`,
+    },
   });
 }));

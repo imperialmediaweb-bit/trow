@@ -10,31 +10,37 @@ const routes = [
     path: '/inbox',
     name: 'inbox',
     component: () => import('../views/InboxPage.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/inbox/:id',
     name: 'inbox-detail',
     component: () => import('../views/InboxDetailPage.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/email/:id',
     name: 'email-detail',
     component: () => import('../views/EmailDetailPage.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/send',
     name: 'send',
     component: () => import('../views/SendPage.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/privacy',
     name: 'privacy',
     component: () => import('../views/PrivacyPage.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/developer',
     name: 'developer',
     component: () => import('../views/DeveloperPage.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/pricing',
@@ -50,6 +56,12 @@ const routes = [
     path: '/register',
     name: 'register',
     component: () => import('../views/RegisterPage.vue'),
+  },
+
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('../views/ResetPasswordPage.vue'),
   },
 
   // ─── Admin Routes ──────────────────────────────────────────
@@ -107,6 +119,13 @@ const routes = [
     component: () => import('../views/admin/AdminSystem.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
+
+  // 404 catch-all
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: () => import('../views/NotFoundPage.vue'),
+  },
 ];
 
 export const router = createRouter({
@@ -114,14 +133,15 @@ export const router = createRouter({
   routes,
 });
 
-// Navigation guard for admin routes
 router.beforeEach((to, _from, next) => {
+  const token = localStorage.getItem('access_token');
+
+  if (to.meta.requiresAuth && !token) {
+    return next('/login');
+  }
+
   if (to.meta.requiresAdmin) {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      return next('/login');
-    }
-    // Decode JWT to check role (basic check, server validates too)
+    if (!token) return next('/login');
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       if (payload.role !== 'admin' && payload.role !== 'superadmin') {

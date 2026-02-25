@@ -138,7 +138,7 @@ inboxRouter.get('/:id', optionalAuth, asyncHandler(async (req: Request, res: Res
 }));
 
 // DELETE /inboxes/:id
-inboxRouter.delete('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+inboxRouter.delete('/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {
   await getInboxWithAuth(req.params.id, req);
 
   await pool.query('UPDATE inboxes SET is_active = false WHERE id = $1', [req.params.id]);

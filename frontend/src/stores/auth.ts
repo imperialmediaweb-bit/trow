@@ -55,5 +55,10 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('refresh_token', refresh);
   }
 
+  // Auto-load user on init if token exists
+  if (accessToken.value) {
+    fetchUser();
+  }
+
   return { user, accessToken, isAuthenticated, isPro, login, register, fetchUser, logout };
 });

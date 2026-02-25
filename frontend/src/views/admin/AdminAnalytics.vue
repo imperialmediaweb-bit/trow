@@ -98,7 +98,7 @@ const maxEmails = computed(() => {
           <div v-for="(row, i) in admin.analytics.top_domains" :key="row.domain"
             class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="text-xs text-gray-400 w-4">{{ i + 1 }}.</span>
+              <span class="text-xs text-gray-400 w-4">{{ Number(i) + 1 }}.</span>
               <span class="text-sm text-gray-700 dark:text-gray-300">{{ row.domain }}</span>
             </div>
             <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ row.count }}</span>

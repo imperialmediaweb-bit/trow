@@ -7,6 +7,7 @@ import { redis } from '../config/redis.js';
 import { logger } from '../config/logger.js';
 import { encrypt } from '../services/encryption.service.js';
 import { v4 as uuidv4 } from 'uuid';
+import { getIO } from '../services/websocket.service.js';
 
 // ─── Email sender helper (Resend or SMTP) ───────────────────
 async function sendOutbound(params: { from: string; to: string; subject: string; text: string; html?: string }) {
@@ -182,6 +183,52 @@ async function processInboundEmail(job: Job) {
       logger.info('Auto-reply sent', { emailId, to: sender });
     } catch (err) {
       logger.error('Auto-reply failed', { emailId, error: (err as Error).message });
+    }
+  }
+
+  // Emit real-time WebSocket event to connected clients
+  try {
+    const ioInstance = getIO();
+    if (ioInstance) {
+      ioInstance.to(`inbox:${resolvedInboxId}`).emit('email:new', {
+        id: emailId,
+        inbox_id: resolvedInboxId,
+        from_address: sender,
+        from_name: parsed.from?.text || sender,
+        subject: parsed.subject || '(no subject)',
+        body_preview: preview,
+        has_attachments: (parsed.attachments?.length || 0) > 0,
+        is_read: false,
+        created_at: new Date().toISOString(),
+      });
+    }
+  } catch (err) {
+    logger.warn('WebSocket emit failed', { emailId, error: (err as Error).message });
+  }
+
+  // Check alias forwarding
+  const aliasResult = await pool.query(
+    `SELECT a.forward_to FROM aliases a JOIN domains d ON a.domain_id = d.id
+     WHERE a.alias_address = $1 AND d.domain = $2 AND a.is_active = true`,
+    [localPart, domain],
+  );
+  if (aliasResult.rowCount! > 0) {
+    const alias = aliasResult.rows[0];
+    try {
+      await sendOutbound({
+        from: `Throwbox Alias <noreply@${domain}>`,
+        to: alias.forward_to,
+        subject: parsed.subject || '(no subject)',
+        text: parsed.text || '',
+        html: parsed.html || undefined,
+      });
+      await pool.query(
+        `UPDATE aliases SET emails_received = emails_received + 1 WHERE alias_address = $1`,
+        [localPart],
+      );
+      logger.info('Alias email forwarded', { alias: `${localPart}@${domain}`, forwardTo: alias.forward_to });
+    } catch (err) {
+      logger.error('Alias forwarding failed', { error: (err as Error).message });
     }
   }
 

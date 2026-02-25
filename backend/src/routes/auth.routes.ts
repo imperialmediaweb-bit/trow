@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config/index.js';
 import { pool } from '../config/database.js';
@@ -125,6 +126,80 @@ authRouter.get('/me', authenticate, asyncHandler(async (req: Request, res: Respo
     [req.user!.userId],
   );
   res.json({ success: true, data: result.rows[0] });
+}));
+
+// POST /auth/forgot-password
+authRouter.post('/forgot-password', asyncHandler(async (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (!email) throw new AppError(400, 'MISSING_EMAIL', 'Email is required');
+
+  const result = await pool.query(
+    'SELECT id, email FROM users WHERE email = $1 AND deleted_at IS NULL',
+    [email],
+  );
+
+  // Always return success to avoid leaking whether email exists
+  if (result.rowCount === 0) {
+    res.json({ success: true, data: { message: 'If the email exists, a reset link has been sent.' } });
+    return;
+  }
+
+  const user = result.rows[0];
+  const resetToken = crypto.randomBytes(32).toString('hex');
+
+  // Store reset token in Redis (1 hour TTL)
+  await redis?.set(`reset:${resetToken}`, user.id, 'EX', 3600);
+
+  // Send reset email via configured provider
+  try {
+    if (process.env.EMAIL_PROVIDER === 'resend' && process.env.RESEND_API_KEY) {
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      await resend.emails.send({
+        from: `Throwbox AI <noreply@${config.mailDomains[0]}>`,
+        to: [user.email],
+        subject: 'Password Reset - Throwbox AI',
+        text: `Reset your password: ${config.appUrl}/reset-password?token=${resetToken}\n\nExpires in 1 hour.`,
+        html: `<h2>Password Reset</h2><p><a href="${config.appUrl}/reset-password?token=${resetToken}">Reset Password</a></p><p>Expires in 1 hour.</p>`,
+      });
+    }
+  } catch {
+    // Don't fail the request if email sending fails
+  }
+
+  res.json({ success: true, data: { message: 'If the email exists, a reset link has been sent.' } });
+}));
+
+// POST /auth/reset-password
+authRouter.post('/reset-password', asyncHandler(async (req: Request, res: Response) => {
+  const { token, new_password } = req.body;
+  if (!token || !new_password) throw new AppError(400, 'MISSING_FIELDS', 'Token and new_password are required');
+  if (new_password.length < 8) throw new AppError(400, 'WEAK_PASSWORD', 'Password must be at least 8 characters');
+
+  const userId = await redis?.get(`reset:${token}`);
+  if (!userId) throw new AppError(400, 'INVALID_TOKEN', 'Reset token is invalid or expired');
+
+  const passwordHash = await bcrypt.hash(new_password, 12);
+  await pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [passwordHash, userId]);
+  await redis?.del(`reset:${token}`);
+
+  res.json({ success: true, data: { message: 'Password reset successfully' } });
+}));
+
+// POST /auth/change-password
+authRouter.post('/change-password', authenticate, asyncHandler(async (req: Request, res: Response) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) throw new AppError(400, 'MISSING_FIELDS', 'Current and new password are required');
+  if (new_password.length < 8) throw new AppError(400, 'WEAK_PASSWORD', 'Password must be at least 8 characters');
+
+  const result = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user!.userId]);
+  const valid = await bcrypt.compare(current_password, result.rows[0].password_hash);
+  if (!valid) throw new AppError(401, 'INVALID_PASSWORD', 'Current password is incorrect');
+
+  const passwordHash = await bcrypt.hash(new_password, 12);
+  await pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [passwordHash, req.user!.userId]);
+
+  res.json({ success: true, data: { message: 'Password changed successfully' } });
 }));
 
 // ─── Helpers ────────────────────────────────────────────────

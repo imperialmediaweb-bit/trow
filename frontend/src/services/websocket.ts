@@ -23,12 +23,27 @@ export function connectWebSocket(token?: string): Socket {
     console.log('WebSocket disconnected');
   });
 
+  socket.on('connect_error', (err) => {
+    console.warn('WebSocket connection error:', err.message);
+  });
+
+  return socket;
+}
+
+function ensureConnected(): Socket | null {
+  if (!socket || !socket.connected) {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      return connectWebSocket(token);
+    }
+  }
   return socket;
 }
 
 export function subscribeToInbox(inboxId: string, token?: string) {
-  if (!socket) return;
-  socket.emit('subscribe_inbox', { inbox_id: inboxId, token });
+  const s = ensureConnected();
+  if (!s) return;
+  s.emit('subscribe_inbox', { inbox_id: inboxId, token });
 }
 
 export function unsubscribeFromInbox(inboxId: string) {
@@ -37,8 +52,9 @@ export function unsubscribeFromInbox(inboxId: string) {
 }
 
 export function onNewEmail(callback: (data: any) => void) {
-  if (!socket) return;
-  socket.on('email:new', callback);
+  const s = ensureConnected();
+  if (!s) return;
+  s.on('email:new', callback);
 }
 
 export function onAiUpdate(callback: (data: any) => void) {

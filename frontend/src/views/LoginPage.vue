@@ -54,6 +54,10 @@ async function demoLogin() {
         </button>
       </form>
 
+      <p class="text-sm text-center text-gray-500 mt-3">
+        <router-link to="/reset-password" class="text-indigo-600 hover:text-indigo-800">Forgot password?</router-link>
+      </p>
+
       <!-- Demo Account -->
       <div class="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
         <p class="text-sm text-amber-800 dark:text-amber-300 font-medium mb-2">Try the full platform</p>

@@ -162,12 +162,20 @@ adminRouter.get('/users/:id', asyncHandler(async (req: Request, res: Response) =
 // PUT /admin/users/:id
 adminRouter.put('/users/:id', asyncHandler(async (req: Request, res: Response) => {
   const { role, plan, display_name, is_banned } = req.body;
+  const validRoles = ['user', 'admin', 'superadmin'];
+  const validPlans = ['free', 'pro', 'business', 'enterprise'];
   const fields: string[] = [];
   const values: any[] = [];
   let idx = 1;
 
-  if (role !== undefined) { fields.push(`role = $${idx++}`); values.push(role); }
-  if (plan !== undefined) { fields.push(`plan = $${idx++}`); values.push(plan); }
+  if (role !== undefined) {
+    if (!validRoles.includes(role)) throw new AppError(400, 'INVALID_ROLE', `Valid roles: ${validRoles.join(', ')}`);
+    fields.push(`role = $${idx++}`); values.push(role);
+  }
+  if (plan !== undefined) {
+    if (!validPlans.includes(plan)) throw new AppError(400, 'INVALID_PLAN', `Valid plans: ${validPlans.join(', ')}`);
+    fields.push(`plan = $${idx++}`); values.push(plan);
+  }
   if (display_name !== undefined) { fields.push(`display_name = $${idx++}`); values.push(display_name); }
   if (is_banned !== undefined) { fields.push(`is_banned = $${idx++}`); values.push(is_banned); }
 
@@ -504,18 +512,46 @@ adminRouter.post('/notifications/send', asyncHandler(async (req: Request, res: R
     recipients = result.rows;
   }
 
-  logger.info('Admin notification queued', {
+  // Send emails via configured provider
+  let sent = 0;
+  let failed = 0;
+  if (process.env.EMAIL_PROVIDER === 'resend' && process.env.RESEND_API_KEY) {
+    const { Resend } = await import('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const domain = process.env.MAIL_DOMAINS?.split(',')[0] || 'throwbox.net';
+
+    for (const r of recipients) {
+      try {
+        await resend.emails.send({
+          from: `Throwbox AI <noreply@${domain}>`,
+          to: [r.email],
+          subject: subject || 'Notification from Throwbox AI',
+          text: body || '',
+          html: body ? `<div>${body}</div>` : '',
+        });
+        sent++;
+      } catch {
+        failed++;
+      }
+    }
+  }
+
+  logger.info('Admin notification sent', {
     admin: req.user?.email,
     subject,
     target,
     recipient_count: recipients.length,
+    sent,
+    failed,
   });
 
   res.json({
     success: true,
     data: {
-      message: `Notification queued for ${recipients.length} recipients`,
+      message: `Notification sent to ${sent} of ${recipients.length} recipients`,
       recipient_count: recipients.length,
+      sent,
+      failed,
     },
   });
 }));
