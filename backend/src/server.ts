@@ -33,7 +33,18 @@ const io = new SocketServer(server, {
 
 setupWebSocket(io);
 
-// ─── Health Check (before middleware so it works even if Redis is down) ──
+// ─── Root & Health Check (before middleware so they work even if Redis is down) ──
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'Throwbox AI',
+    description: 'Temporary Email & Privacy Platform API',
+    version: process.env.npm_package_version || '0.1.0',
+    status: 'running',
+    docs: '/api/v1',
+    health: '/health',
+  });
+});
+
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
