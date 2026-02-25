@@ -20,6 +20,7 @@ import { developerRouter } from './routes/developer.routes.js';
 import { billingRouter } from './routes/billing.routes.js';
 import { adminRouter } from './routes/admin.routes.js';
 import { blogRouter } from './routes/blog.routes.js';
+import { webhookRouter } from './routes/webhook.routes.js';
 import { setupWebSocket } from './services/websocket.service.js';
 import { pool } from './config/database.js';
 
@@ -73,6 +74,7 @@ api.use('/developer', developerRouter);
 api.use('/billing', billingRouter);
 api.use('/admin', adminRouter);
 api.use('/blog', blogRouter);
+api.use('/webhooks', webhookRouter);
 
 app.use('/api/v1', api);
 
