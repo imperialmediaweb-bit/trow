@@ -5,7 +5,7 @@ import compression from 'compression';
 import morgan from 'morgan';
 import { createServer } from 'http';
 import { resolve } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { Server as SocketServer } from 'socket.io';
 import { config } from './config/index.js';
 import { logger } from './config/logger.js';
@@ -20,6 +20,7 @@ import { developerRouter } from './routes/developer.routes.js';
 import { billingRouter } from './routes/billing.routes.js';
 import { adminRouter } from './routes/admin.routes.js';
 import { setupWebSocket } from './services/websocket.service.js';
+import { pool } from './config/database.js';
 
 const app = express();
 const server = createServer(app);
@@ -90,6 +91,43 @@ if (hasPublicDir) {
   });
 }
 
+// ─── Auto-Migration ─────────────────────────────────────────
+async function runMigrations() {
+  try {
+    const result = await pool.query(
+      `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')`,
+    );
+    if (result.rows[0].exists) {
+      logger.info('Database tables already exist, skipping migration');
+      return;
+    }
+
+    logger.info('Running database migrations...');
+    const migrationPaths = [
+      resolve(process.cwd(), 'database/migrations/001_initial.sql'),
+      resolve(process.cwd(), '../backend/database/migrations/001_initial.sql'),
+    ];
+
+    let migrationSql = '';
+    for (const p of migrationPaths) {
+      if (existsSync(p)) {
+        migrationSql = readFileSync(p, 'utf-8');
+        break;
+      }
+    }
+
+    if (!migrationSql) {
+      logger.warn('Migration file not found, skipping');
+      return;
+    }
+
+    await pool.query(migrationSql);
+    logger.info('Database migration completed successfully');
+  } catch (err) {
+    logger.error('Database migration failed', { error: (err as Error).message });
+  }
+}
+
 // ─── Start Workers (in same process for Railway) ────────────
 async function startWorkers() {
   try {
@@ -130,6 +168,7 @@ const PORT = config.port;
 server.listen(PORT, async () => {
   logger.info(`Throwbox API running on port ${PORT}`);
   logger.info(`Environment: ${config.nodeEnv}`);
+  await runMigrations();
   await startWorkers();
 });
 

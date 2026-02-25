@@ -35,6 +35,7 @@ RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit
 
 COPY --from=backend-builder /app/dist ./dist
 COPY --from=frontend-builder /frontend/dist ./public
+COPY backend/database/ ./database/
 
 ENV NODE_ENV=production
 

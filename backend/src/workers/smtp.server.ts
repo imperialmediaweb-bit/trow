@@ -4,15 +4,18 @@ import { pool } from '../config/database.js';
 import { logger } from '../config/logger.js';
 
 const SMTP_PORT = parseInt(process.env.SMTP_LISTEN_PORT || '2525');
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const redisUrl = process.env.REDIS_URL;
 
 // ─── Inbound email queue ────────────────────────────────────
-let inboundQueue: Queue;
-try {
-  inboundQueue = new Queue('inbound-email', { connection: { url: redisUrl } });
-} catch (err) {
-  logger.error('Failed to connect inbound email queue', { error: (err as Error).message });
-  process.exit(1);
+let inboundQueue: Queue | null = null;
+if (redisUrl) {
+  try {
+    inboundQueue = new Queue('inbound-email', { connection: { url: redisUrl } });
+  } catch (err) {
+    logger.warn('Failed to connect inbound email queue', { error: (err as Error).message });
+  }
+} else {
+  logger.warn('REDIS_URL not set – SMTP inbound queue disabled');
 }
 
 // ─── SMTP Server ────────────────────────────────────────────
@@ -80,6 +83,10 @@ const server = new SMTPServer({
 
       // Queue processing for each recipient
       for (const recipient of recipients) {
+        if (!inboundQueue) {
+          logger.warn('No queue available, email dropped', { recipient });
+          continue;
+        }
         try {
           await inboundQueue.add(
             'process',

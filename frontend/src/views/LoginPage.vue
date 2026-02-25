@@ -22,6 +22,12 @@ async function handleLogin() {
     loading.value = false;
   }
 }
+
+async function demoLogin() {
+  email.value = 'demo@throwbox.net';
+  password.value = 'demo2025';
+  await handleLogin();
+}
 </script>
 
 <template>
@@ -48,7 +54,17 @@ async function handleLogin() {
         </button>
       </form>
 
-      <p class="mt-6 text-center text-sm text-gray-500">
+      <!-- Demo Account -->
+      <div class="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+        <p class="text-sm text-amber-800 dark:text-amber-300 font-medium mb-2">Try the full platform</p>
+        <p class="text-xs text-amber-600 dark:text-amber-400 mb-3">Access all Business plan features with our demo account</p>
+        <button @click="demoLogin" :disabled="loading"
+          class="w-full bg-amber-500 text-white py-2.5 rounded-lg font-medium hover:bg-amber-600 disabled:opacity-50 text-sm">
+          {{ loading ? 'Logging in...' : 'Demo Login (Business Plan)' }}
+        </button>
+      </div>
+
+      <p class="mt-4 text-center text-sm text-gray-500">
         Don't have an account?
         <router-link to="/register" class="text-indigo-600 hover:text-indigo-500 font-medium">Sign up</router-link>
       </p>

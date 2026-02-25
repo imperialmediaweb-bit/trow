@@ -4,8 +4,8 @@ dotenv.config();
 
 function requireEnv(key: string, fallback?: string): string {
   const value = process.env[key] || fallback;
-  if (!value && process.env.NODE_ENV === 'production') {
-    throw new Error(`Missing required environment variable: ${key}`);
+  if (!value) {
+    console.warn(`Warning: environment variable ${key} is not set`);
   }
   return value || '';
 }
@@ -51,7 +51,7 @@ export const config = {
   s3Region: process.env.S3_REGION || 'us-east-1',
 
   // CORS
-  corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173').split(','),
+  corsOrigins: (process.env.CORS_ORIGINS || 'https://www.throwbox.net,https://throwbox.net,http://localhost:5173').split(','),
 
   // Email sending
   emailProvider: process.env.EMAIL_PROVIDER || 'resend', // 'resend' or 'smtp'
