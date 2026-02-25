@@ -4,8 +4,8 @@ dotenv.config();
 
 function requireEnv(key: string, fallback?: string): string {
   const value = process.env[key] || fallback;
-  if (!value && process.env.NODE_ENV === 'production') {
-    throw new Error(`Missing required environment variable: ${key}`);
+  if (!value) {
+    console.warn(`Warning: environment variable ${key} is not set`);
   }
   return value || '';
 }
