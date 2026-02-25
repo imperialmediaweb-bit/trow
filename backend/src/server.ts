@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import { createServer } from 'http';
+import { resolve } from 'path';
+import { existsSync } from 'fs';
 import { Server as SocketServer } from 'socket.io';
 import { config } from './config/index.js';
 import { logger } from './config/logger.js';
@@ -22,6 +24,10 @@ import { setupWebSocket } from './services/websocket.service.js';
 const app = express();
 const server = createServer(app);
 
+// ─── Frontend directory detection ────────────────────────────
+const publicDir = resolve(process.cwd(), 'public');
+const hasPublicDir = existsSync(publicDir);
+
 // ─── WebSocket ──────────────────────────────────────────────
 const io = new SocketServer(server, {
   cors: {
@@ -33,18 +39,7 @@ const io = new SocketServer(server, {
 
 setupWebSocket(io);
 
-// ─── Root & Health Check (before middleware so they work even if Redis is down) ──
-app.get('/', (_req, res) => {
-  res.json({
-    name: 'Throwbox AI',
-    description: 'Temporary Email & Privacy Platform API',
-    version: process.env.npm_package_version || '0.1.0',
-    status: 'running',
-    docs: '/api/v1',
-    health: '/health',
-  });
-});
-
+// ─── Health Check (before middleware so it works even if Redis is down) ──
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
@@ -55,7 +50,9 @@ app.get('/health', (_req, res) => {
 });
 
 // ─── Middleware ──────────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: hasPublicDir ? false : undefined,
+}));
 app.use(compression());
 app.use(cors({ origin: config.corsOrigins, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
@@ -76,8 +73,22 @@ api.use('/admin', adminRouter);
 
 app.use('/api/v1', api);
 
-// ─── Error Handling ─────────────────────────────────────────
-app.use(errorHandler);
+// ─── Frontend Static Files ──────────────────────────────────
+if (hasPublicDir) {
+  app.use(express.static(publicDir, { maxAge: '1y', immutable: true, index: false }));
+  logger.info(`Serving frontend from ${publicDir}`);
+}
+
+// ─── Error Handling (API only) ──────────────────────────────
+app.use('/api', errorHandler);
+
+// ─── SPA Fallback ───────────────────────────────────────────
+if (hasPublicDir) {
+  const indexHtml = resolve(publicDir, 'index.html');
+  app.get('*', (_req, res) => {
+    res.sendFile(indexHtml);
+  });
+}
 
 // ─── Start ──────────────────────────────────────────────────
 const PORT = config.port;
