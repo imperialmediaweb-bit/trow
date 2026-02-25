@@ -23,7 +23,7 @@ adminRouter.get('/stats', async (_req: Request, res: Response) => {
     pool.query('SELECT COUNT(*) FROM inboxes WHERE is_active = true AND expires_at > NOW()'),
     pool.query("SELECT COUNT(*) FROM users WHERE plan != 'free' AND deleted_at IS NULL"),
     pool.query("SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE AND deleted_at IS NULL"),
-    pool.query("SELECT COUNT(*) FROM emails WHERE received_at >= CURRENT_DATE"),
+    pool.query("SELECT COUNT(*) FROM emails WHERE created_at >= CURRENT_DATE"),
   ]);
 
   res.json({
@@ -52,9 +52,9 @@ adminRouter.get('/analytics', async (req: Request, res: Response) => {
       [days],
     ),
     pool.query(
-      `SELECT DATE(received_at) as date, COUNT(*) as count
-       FROM emails WHERE received_at >= NOW() - INTERVAL '1 day' * $1
-       GROUP BY DATE(received_at) ORDER BY date`,
+      `SELECT DATE(created_at) as date, COUNT(*) as count
+       FROM emails WHERE created_at >= NOW() - INTERVAL '1 day' * $1
+       GROUP BY DATE(created_at) ORDER BY date`,
       [days],
     ),
     pool.query(
