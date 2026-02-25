@@ -19,23 +19,28 @@ const llm = ref({
   rate_limit_per_user: 100,
 });
 
-const providerMeta: Record<string, { name: string; models: string[]; color: string }> = {
-  claude: {
+type ProviderKey = 'claude' | 'openai' | 'google';
+
+const providerList: { key: ProviderKey; name: string; models: string[]; color: string }[] = [
+  {
+    key: 'claude',
     name: 'Anthropic Claude',
     models: ['claude-sonnet-4-20250514', 'claude-haiku-4-5-20251001', 'claude-opus-4-20250514'],
     color: 'bg-orange-500',
   },
-  openai: {
+  {
+    key: 'openai',
     name: 'OpenAI',
     models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     color: 'bg-green-500',
   },
-  google: {
+  {
+    key: 'google',
     name: 'Google AI',
     models: ['gemini-pro', 'gemini-pro-vision', 'gemini-ultra'],
     color: 'bg-blue-500',
   },
-};
+];
 
 onMounted(async () => {
   await admin.fetchSettings();
@@ -58,10 +63,10 @@ async function save() {
   }
 }
 
-async function testProvider(provider: string) {
-  const cfg = llm.value.providers[provider as keyof typeof llm.value.providers];
+async function testProvider(provider: ProviderKey) {
+  const cfg = llm.value.providers[provider];
   if (!cfg.api_key) {
-    message.value = `Please enter an API key for ${providerMeta[provider].name}`;
+    message.value = `Please enter an API key for ${provider}`;
     return;
   }
   testing.value = provider;
@@ -69,7 +74,7 @@ async function testProvider(provider: string) {
   try {
     const result = await admin.testLlm({ provider, api_key: cfg.api_key, model: cfg.model });
     message.value = result.success
-      ? `${providerMeta[provider].name}: ${result.data.response}`
+      ? `${provider}: ${result.data.response}`
       : `Error: ${result.error?.message}`;
   } catch (err: any) {
     message.value = `Error: ${err.response?.data?.error?.message || err.message}`;
@@ -124,47 +129,47 @@ async function testProvider(provider: string) {
 
     <!-- Provider Cards -->
     <div class="space-y-4">
-      <div v-for="(meta, key) in providerMeta" :key="key"
+      <div v-for="p in providerList" :key="p.key"
         class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3">
-            <div :class="[meta.color, 'w-10 h-10 rounded-lg flex items-center justify-center']">
-              <span class="text-white text-sm font-bold">{{ meta.name[0] }}</span>
+            <div :class="[p.color, 'w-10 h-10 rounded-lg flex items-center justify-center']">
+              <span class="text-white text-sm font-bold">{{ p.name[0] }}</span>
             </div>
             <div>
-              <h3 class="font-semibold text-gray-900 dark:text-white">{{ meta.name }}</h3>
+              <h3 class="font-semibold text-gray-900 dark:text-white">{{ p.name }}</h3>
               <p class="text-xs text-gray-500">
-                {{ key === llm.primary_provider ? 'Primary' : key === llm.fallback_provider ? 'Fallback' : 'Inactive' }}
+                {{ p.key === llm.primary_provider ? 'Primary' : p.key === llm.fallback_provider ? 'Fallback' : 'Inactive' }}
               </p>
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <input type="checkbox" v-model="llm.providers[key as keyof typeof llm.providers].enabled"
-              :id="`enable-${key}`" class="rounded border-gray-300 text-indigo-600" />
-            <label :for="`enable-${key}`" class="text-sm text-gray-700 dark:text-gray-300">Enabled</label>
+            <input type="checkbox" v-model="llm.providers[p.key].enabled"
+              :id="`enable-${p.key}`" class="rounded border-gray-300 text-indigo-600" />
+            <label :for="`enable-${p.key}`" class="text-sm text-gray-700 dark:text-gray-300">Enabled</label>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Key</label>
-            <input v-model="llm.providers[key as keyof typeof llm.providers].api_key"
+            <input v-model="llm.providers[p.key].api_key"
               type="password" autocomplete="off" placeholder="sk-..."
               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Model</label>
-            <select v-model="llm.providers[key as keyof typeof llm.providers].model"
+            <select v-model="llm.providers[p.key].model"
               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white">
-              <option v-for="m in meta.models" :key="m" :value="m">{{ m }}</option>
+              <option v-for="m in p.models" :key="m" :value="m">{{ m }}</option>
             </select>
           </div>
         </div>
 
         <div class="mt-3">
-          <button @click="testProvider(key)" :disabled="testing === key"
+          <button @click="testProvider(p.key)" :disabled="testing === p.key"
             class="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 disabled:opacity-50">
-            {{ testing === key ? 'Testing...' : 'Test Connection' }}
+            {{ testing === p.key ? 'Testing...' : 'Test Connection' }}
           </button>
         </div>
       </div>
