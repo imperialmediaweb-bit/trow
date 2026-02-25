@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '../stores/auth.js';
 
 const { t } = useI18n();
+const auth = useAuthStore();
 const mobileMenuOpen = ref(false);
+
+const isAdmin = computed(() => auth.user?.role === 'admin' || auth.user?.role === 'superadmin');
 
 const navItems = [
   { key: 'home', path: '/' },
@@ -41,18 +45,27 @@ const navItems = [
           </div>
 
           <div class="flex items-center space-x-4">
-            <router-link
-              to="/login"
-              class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600"
-            >
-              Log in
+            <router-link v-if="isAdmin" to="/admin"
+              class="text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-700">
+              Admin
             </router-link>
-            <router-link
-              to="/register"
-              class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-            >
-              Get Started
-            </router-link>
+            <template v-if="auth.isAuthenticated">
+              <span class="text-sm text-gray-500 dark:text-gray-400">{{ auth.user?.email }}</span>
+              <button @click="auth.logout()"
+                class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600">
+                Log out
+              </button>
+            </template>
+            <template v-else>
+              <router-link to="/login"
+                class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600">
+                Log in
+              </router-link>
+              <router-link to="/register"
+                class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+                Get Started
+              </router-link>
+            </template>
           </div>
         </div>
       </div>

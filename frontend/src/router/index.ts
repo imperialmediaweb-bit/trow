@@ -46,9 +46,85 @@ const routes = [
     name: 'register',
     component: () => import('../views/RegisterPage.vue'),
   },
+
+  // ─── Admin Routes ──────────────────────────────────────────
+  {
+    path: '/admin',
+    name: 'admin',
+    component: () => import('../views/admin/AdminDashboard.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/users',
+    name: 'admin-users',
+    component: () => import('../views/admin/AdminUsers.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/settings',
+    name: 'admin-settings',
+    component: () => import('../views/admin/AdminSettings.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/smtp',
+    name: 'admin-smtp',
+    component: () => import('../views/admin/AdminSmtp.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/llm',
+    name: 'admin-llm',
+    component: () => import('../views/admin/AdminLlm.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/analytics',
+    name: 'admin-analytics',
+    component: () => import('../views/admin/AdminAnalytics.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/pages',
+    name: 'admin-pages',
+    component: () => import('../views/admin/AdminPages.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/notifications',
+    name: 'admin-notifications',
+    component: () => import('../views/admin/AdminNotifications.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/system',
+    name: 'admin-system',
+    component: () => import('../views/admin/AdminSystem.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
 ];
 
 export const router = createRouter({
   history: createWebHistory(),
   routes,
+});
+
+// Navigation guard for admin routes
+router.beforeEach((to, _from, next) => {
+  if (to.meta.requiresAdmin) {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      return next('/login');
+    }
+    // Decode JWT to check role (basic check, server validates too)
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.role !== 'admin' && payload.role !== 'superadmin') {
+        return next('/');
+      }
+    } catch {
+      return next('/login');
+    }
+  }
+  next();
 });
