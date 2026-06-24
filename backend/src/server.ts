@@ -7,7 +7,8 @@ import { createServer } from 'http';
 import { resolve } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { Server as SocketServer } from 'socket.io';
-import { config } from './config/index.js';
+import bcrypt from 'bcryptjs';
+import { config, validateConfig } from './config/index.js';
 import { logger } from './config/logger.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -58,6 +59,9 @@ app.use(helmet({
 }));
 app.use(compression());
 app.use(cors({ origin: config.corsOrigins, credentials: true }));
+// Stripe webhook must receive the raw body to verify its signature, so it is
+// registered with a raw body parser BEFORE the global JSON parser.
+app.use('/api/v1/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
@@ -132,6 +136,35 @@ async function runMigrations() {
   }
 }
 
+// ─── First-boot Admin Bootstrap ─────────────────────────────
+// Creates (or promotes) an admin account from ADMIN_EMAIL / ADMIN_PASSWORD.
+// Replaces the previously hardcoded admin seed so no known password ships in
+// source control. Runs only when both env vars are set.
+async function bootstrapAdmin() {
+  if (!config.adminEmail || !config.adminPassword) return;
+  try {
+    const existing = await pool.query('SELECT id, role FROM users WHERE email = $1', [config.adminEmail]);
+    const passwordHash = await bcrypt.hash(config.adminPassword, 12);
+
+    if (existing.rowCount === 0) {
+      await pool.query(
+        `INSERT INTO users (email, password_hash, display_name, role, plan, email_verified)
+         VALUES ($1, $2, 'Admin', 'superadmin', 'enterprise', true)`,
+        [config.adminEmail, passwordHash],
+      );
+      logger.info('Admin account created from ADMIN_EMAIL', { email: config.adminEmail });
+    } else if (existing.rows[0].role !== 'superadmin' && existing.rows[0].role !== 'admin') {
+      await pool.query(
+        `UPDATE users SET role = 'superadmin', plan = 'enterprise' WHERE email = $1`,
+        [config.adminEmail],
+      );
+      logger.info('Existing user promoted to admin', { email: config.adminEmail });
+    }
+  } catch (err) {
+    logger.error('Admin bootstrap failed', { error: (err as Error).message });
+  }
+}
+
 // ─── Start Workers (in same process for Railway) ────────────
 async function startWorkers() {
   try {
@@ -175,6 +208,9 @@ process.on('uncaughtException', (err: Error) => {
   logger.error('Uncaught exception', { error: err.message, stack: err.stack });
 });
 
+// ─── Validate configuration (fail-fast on insecure prod config) ──
+validateConfig();
+
 // ─── Start ──────────────────────────────────────────────────
 const PORT = config.port;
 
@@ -189,6 +225,11 @@ server.listen(PORT, async () => {
     await runMigrations();
   } catch (err) {
     logger.error('Migration startup error', { error: (err as Error).message });
+  }
+  try {
+    await bootstrapAdmin();
+  } catch (err) {
+    logger.error('Admin bootstrap startup error', { error: (err as Error).message });
   }
   try {
     await startWorkers();

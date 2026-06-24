@@ -103,7 +103,7 @@ async function save(section: string) {
           <input v-model="homepage.cta_text" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white" />
         </div>
         <div class="flex items-center gap-2">
-          <input type="checkbox" v-model="homepage.show_features" id="show-features" class="rounded border-gray-300 text-indigo-600" />
+          <input type="checkbox" v-model="homepage.show_features" id="show-features" class="rounded border border-gray-300 text-indigo-600" />
           <label for="show-features" class="text-sm text-gray-700 dark:text-gray-300">Show features section</label>
         </div>
         <button @click="save('homepage')" :disabled="saving"
@@ -154,11 +154,11 @@ async function save(section: string) {
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">General Settings</h2>
       <div class="space-y-4 max-w-xl">
         <div class="flex items-center gap-2">
-          <input type="checkbox" v-model="general.maintenance_mode" id="maint" class="rounded border-gray-300 text-red-600" />
+          <input type="checkbox" v-model="general.maintenance_mode" id="maint" class="rounded border border-gray-300 text-red-600" />
           <label for="maint" class="text-sm text-gray-700 dark:text-gray-300">Maintenance Mode</label>
         </div>
         <div class="flex items-center gap-2">
-          <input type="checkbox" v-model="general.registration_enabled" id="reg" class="rounded border-gray-300 text-indigo-600" />
+          <input type="checkbox" v-model="general.registration_enabled" id="reg" class="rounded border border-gray-300 text-indigo-600" />
           <label for="reg" class="text-sm text-gray-700 dark:text-gray-300">Registration Enabled</label>
         </div>
         <div>

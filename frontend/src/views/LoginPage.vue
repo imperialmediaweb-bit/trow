@@ -41,12 +41,12 @@ async function demoLogin() {
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
           <input v-model="email" type="email" required autofocus
-            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-3" />
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
           <input v-model="password" type="password" required
-            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-3" />
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
         </div>
         <button type="submit" :disabled="loading"
           class="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50">

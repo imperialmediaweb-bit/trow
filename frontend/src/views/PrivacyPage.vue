@@ -26,6 +26,7 @@ interface PrivacyScore {
 const aliases = ref<Alias[]>([]);
 const privacyScore = ref<PrivacyScore | null>(null);
 const error = ref('');
+const feedback = ref('');
 
 // Create alias
 const showCreateAlias = ref(false);
@@ -76,9 +77,13 @@ async function createAlias() {
 }
 
 async function deleteAlias(id: string) {
+  if (!confirm('Delete this alias? Email forwarding to it will stop immediately.')) return;
+  error.value = '';
+  feedback.value = '';
   try {
     await api.delete(`/privacy/aliases/${id}`);
     aliases.value = aliases.value.filter(a => a.id !== id);
+    feedback.value = 'Alias deleted.';
     await fetchScore();
   } catch (err: any) {
     error.value = err.response?.data?.error?.message || 'Failed to delete alias';
@@ -113,6 +118,10 @@ onMounted(() => {
     <div v-if="error" class="mb-6 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
       {{ error }}
       <button @click="error = ''" class="ml-2 font-bold">&times;</button>
+    </div>
+    <div v-if="feedback" class="mb-6 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
+      {{ feedback }}
+      <button @click="feedback = ''" class="ml-2 font-bold">&times;</button>
     </div>
 
     <div v-if="!auth.isAuthenticated" class="text-center py-16">
@@ -153,7 +162,7 @@ onMounted(() => {
           <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Check if your email appeared in known data breaches.</p>
           <div class="space-y-3">
             <input v-model="leakEmail" type="email" placeholder="your@email.com"
-              class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-indigo-500" />
+              class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
             <button @click="checkLeak" :disabled="leakChecking || !leakEmail"
               class="w-full bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
               {{ leakChecking ? 'Checking...' : 'Check Email' }}
@@ -202,12 +211,12 @@ onMounted(() => {
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-1">Forward to (your real email)</label>
               <input v-model="aliasForwardTo" type="email" placeholder="your@real-email.com" required
-                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
+                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-1">Label (optional)</label>
               <input v-model="aliasLabel" type="text" placeholder="e.g. Netflix, Shopping"
-                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
+                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
             </div>
           </div>
           <button @click="createAlias" :disabled="creatingAlias || !aliasForwardTo"

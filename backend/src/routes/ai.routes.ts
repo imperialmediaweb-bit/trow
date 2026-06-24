@@ -1,15 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../config/database.js';
 import { authenticate, requirePlan } from '../middleware/auth.js';
+import { aiLimiter } from '../middleware/rate-limiter.js';
 import { AppError, asyncHandler } from '../middleware/error-handler.js';
 import { aiComposeSchema, aiSummarizeSchema } from '../models/schemas.js';
 import * as aiService from '../services/ai.service.js';
-import { decrypt } from '../services/encryption.service.js';
+import { decryptStored } from '../services/encryption.service.js';
+import { z } from 'zod';
 
 export const aiRouter = Router();
 
+// Per-user limiter for expensive AI endpoints (external API cost protection).
+const emailIdSchema = z.object({ email_id: z.string().uuid() });
+
 // POST /ai/summarize
-aiRouter.post('/summarize', authenticate, asyncHandler(async (req: Request, res: Response) => {
+aiRouter.post('/summarize', authenticate, aiLimiter, asyncHandler(async (req: Request, res: Response) => {
   const data = aiSummarizeSchema.parse(req.body);
 
   const result = await pool.query(
@@ -25,7 +30,7 @@ aiRouter.post('/summarize', authenticate, asyncHandler(async (req: Request, res:
 
   const email = result.rows[0];
   let bodyText = email.body_text;
-  try { bodyText = decrypt(bodyText); } catch { /* already plain */ }
+  bodyText = decryptStored(bodyText) || '';
 
   const analysis = await aiService.analyzeEmail(
     email.subject,
@@ -53,8 +58,8 @@ aiRouter.post('/summarize', authenticate, asyncHandler(async (req: Request, res:
 }));
 
 // POST /ai/extract-otp
-aiRouter.post('/extract-otp', authenticate, asyncHandler(async (req: Request, res: Response) => {
-  const { email_id } = req.body;
+aiRouter.post('/extract-otp', authenticate, aiLimiter, asyncHandler(async (req: Request, res: Response) => {
+  const { email_id } = emailIdSchema.parse(req.body);
 
   const result = await pool.query(
     `SELECT e.body_text FROM emails e JOIN inboxes i ON e.inbox_id = i.id
@@ -67,7 +72,7 @@ aiRouter.post('/extract-otp', authenticate, asyncHandler(async (req: Request, re
   }
 
   let bodyText = result.rows[0].body_text;
-  try { bodyText = decrypt(bodyText); } catch { /* already plain */ }
+  bodyText = decryptStored(bodyText) || '';
 
   // Regex extraction first (fast path)
   const otpRegex = /\b(\d{4,8})\b/g;
@@ -86,8 +91,8 @@ aiRouter.post('/extract-otp', authenticate, asyncHandler(async (req: Request, re
 }));
 
 // POST /ai/phishing-check
-aiRouter.post('/phishing-check', authenticate, asyncHandler(async (req: Request, res: Response) => {
-  const { email_id } = req.body;
+aiRouter.post('/phishing-check', authenticate, aiLimiter, asyncHandler(async (req: Request, res: Response) => {
+  const { email_id } = emailIdSchema.parse(req.body);
 
   const result = await pool.query(
     `SELECT e.subject, e.body_text, e.from_address, e.headers, e.body_html
@@ -102,7 +107,7 @@ aiRouter.post('/phishing-check', authenticate, asyncHandler(async (req: Request,
 
   const email = result.rows[0];
   let bodyText = email.body_text;
-  try { bodyText = decrypt(bodyText); } catch { /* already plain */ }
+  bodyText = decryptStored(bodyText) || '';
 
   const analysis = await aiService.analyzeEmail(
     email.subject, bodyText, email.from_address, email.headers || {},
@@ -120,7 +125,7 @@ aiRouter.post('/phishing-check', authenticate, asyncHandler(async (req: Request,
 }));
 
 // POST /ai/compose
-aiRouter.post('/compose', authenticate, requirePlan('pro', 'business', 'enterprise'), asyncHandler(async (req: Request, res: Response) => {
+aiRouter.post('/compose', authenticate, aiLimiter, requirePlan('pro', 'business', 'enterprise'), asyncHandler(async (req: Request, res: Response) => {
   const data = aiComposeSchema.parse(req.body);
 
   let context: string | undefined;
@@ -132,7 +137,7 @@ aiRouter.post('/compose', authenticate, requirePlan('pro', 'business', 'enterpri
     );
     if (result.rowCount! > 0) {
       let bodyText = result.rows[0].body_text;
-      try { bodyText = decrypt(bodyText); } catch { /* already plain */ }
+      bodyText = decryptStored(bodyText) || '';
       context = `Subject: ${result.rows[0].subject}\n\n${bodyText}`;
     }
   }
@@ -145,7 +150,7 @@ aiRouter.post('/compose', authenticate, requirePlan('pro', 'business', 'enterpri
 }));
 
 // POST /ai/grammar
-aiRouter.post('/grammar', authenticate, requirePlan('pro', 'business', 'enterprise'), asyncHandler(async (req: Request, res: Response) => {
+aiRouter.post('/grammar', authenticate, aiLimiter, requirePlan('pro', 'business', 'enterprise'), asyncHandler(async (req: Request, res: Response) => {
   const { text } = req.body;
   if (!text) throw new AppError(400, 'MISSING_TEXT', 'Text is required');
 
@@ -154,7 +159,7 @@ aiRouter.post('/grammar', authenticate, requirePlan('pro', 'business', 'enterpri
 }));
 
 // POST /ai/tone-adjust
-aiRouter.post('/tone-adjust', authenticate, requirePlan('pro', 'business', 'enterprise'), asyncHandler(async (req: Request, res: Response) => {
+aiRouter.post('/tone-adjust', authenticate, aiLimiter, requirePlan('pro', 'business', 'enterprise'), asyncHandler(async (req: Request, res: Response) => {
   const { text, tone } = req.body;
   if (!text || !tone) throw new AppError(400, 'MISSING_FIELDS', 'Text and tone are required');
 

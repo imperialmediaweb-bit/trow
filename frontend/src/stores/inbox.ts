@@ -30,6 +30,11 @@ export const useInboxStore = defineStore('inbox', () => {
   const currentInbox = ref<Inbox | null>(null);
   const emails = ref<Email[]>([]);
   const loading = ref(false);
+  const error = ref('');
+
+  function errMsg(err: any, fallback: string): string {
+    return err?.response?.data?.error?.message || fallback;
+  }
 
   async function createInbox(options: {
     domain?: string;
@@ -38,11 +43,15 @@ export const useInboxStore = defineStore('inbox', () => {
     visibility?: string;
   }) {
     loading.value = true;
+    error.value = '';
     try {
       const { data } = await api.post('/inboxes', options);
       const inbox = data.data;
       inboxes.value.unshift(inbox);
       return inbox;
+    } catch (err: any) {
+      error.value = errMsg(err, 'Failed to create inbox');
+      throw err;
     } finally {
       loading.value = false;
     }
@@ -50,9 +59,12 @@ export const useInboxStore = defineStore('inbox', () => {
 
   async function fetchInboxes() {
     loading.value = true;
+    error.value = '';
     try {
       const { data } = await api.get('/inboxes');
       inboxes.value = data.data;
+    } catch (err: any) {
+      error.value = errMsg(err, 'Failed to load inboxes');
     } finally {
       loading.value = false;
     }
@@ -60,12 +72,21 @@ export const useInboxStore = defineStore('inbox', () => {
 
   async function fetchEmails(inboxId: string) {
     loading.value = true;
+    error.value = '';
     try {
       const { data } = await api.get(`/inboxes/${inboxId}/emails`);
       emails.value = data.data;
+    } catch (err: any) {
+      error.value = errMsg(err, 'Failed to load emails');
     } finally {
       loading.value = false;
     }
+  }
+
+  async function addEmail(email: Email) {
+    // Dedupe by id to avoid duplicates from repeated socket events.
+    if (emails.value.some((e) => e.id === email.id)) return;
+    emails.value.unshift(email);
   }
 
   async function deleteInbox(id: string) {
@@ -73,5 +94,5 @@ export const useInboxStore = defineStore('inbox', () => {
     inboxes.value = inboxes.value.filter((i) => i.id !== id);
   }
 
-  return { inboxes, currentInbox, emails, loading, createInbox, fetchInboxes, fetchEmails, deleteInbox };
+  return { inboxes, currentInbox, emails, loading, error, createInbox, fetchInboxes, fetchEmails, addEmail, deleteInbox };
 });

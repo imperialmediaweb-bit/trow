@@ -57,6 +57,15 @@ export function onNewEmail(callback: (data: any) => void) {
   s.on('email:new', callback);
 }
 
+export function offNewEmail(callback?: (data: any) => void) {
+  if (!socket) return;
+  if (callback) {
+    socket.off('email:new', callback);
+  } else {
+    socket.off('email:new');
+  }
+}
+
 export function onAiUpdate(callback: (data: any) => void) {
   if (!socket) return;
   socket.on('email:ai_update', callback);

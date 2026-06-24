@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useInboxStore } from '../stores/inbox.js';
-import { subscribeToInbox, unsubscribeFromInbox, onNewEmail } from '../services/websocket.js';
+import { subscribeToInbox, unsubscribeFromInbox, onNewEmail, offNewEmail } from '../services/websocket.js';
 import { api } from '../services/api.js';
 
 const route = useRoute();
@@ -11,6 +11,8 @@ const store = useInboxStore();
 const inboxId = route.params.id as string;
 const copied = ref(false);
 const inboxInfo = ref<any>(null);
+const error = ref('');
+const feedback = ref('');
 
 async function loadInbox() {
   try {
@@ -20,18 +22,31 @@ async function loadInbox() {
       ...data.data,
       full_address: `${data.data.address}@${data.data.domain}`,
     };
-  } catch { /* ignore */ }
+  } catch (err: any) {
+    error.value = err.response?.data?.error?.message || 'Failed to load inbox details';
+  }
+}
+
+// Named handler so it can be removed on unmount and avoid duplicate listeners.
+function handleNewEmail(data: any) {
+  const email = data?.email ?? data;
+  if (email && email.id) {
+    store.addEmail(email);
+  } else {
+    store.fetchEmails(inboxId);
+  }
 }
 
 onMounted(() => {
   loadInbox();
   store.fetchEmails(inboxId);
   subscribeToInbox(inboxId);
-  onNewEmail(() => store.fetchEmails(inboxId));
+  onNewEmail(handleNewEmail);
 });
 
 onUnmounted(() => {
   unsubscribeFromInbox(inboxId);
+  offNewEmail(handleNewEmail);
 });
 
 function copyAddress() {
@@ -64,10 +79,14 @@ const fullAddress = computed(() => {
 });
 
 async function deleteInbox() {
+  if (!confirm('Delete this inbox and all its emails? This action cannot be undone.')) return;
   try {
     await store.deleteInbox(inboxId);
+    feedback.value = 'Inbox deleted.';
     router.push('/inbox');
-  } catch { /* ignore */ }
+  } catch (err: any) {
+    error.value = err.response?.data?.error?.message || 'Failed to delete inbox';
+  }
 }
 </script>
 
@@ -104,6 +123,11 @@ async function deleteInbox() {
         </div>
       </div>
     </div>
+
+    <div v-if="error || store.error" class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-lg text-sm">
+      {{ error || store.error }}
+    </div>
+    <div v-if="feedback" class="mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm">{{ feedback }}</div>
 
     <div v-if="store.loading" class="text-center py-12 text-gray-500">Loading emails...</div>
 

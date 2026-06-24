@@ -3,6 +3,7 @@ import { pool } from '../config/database.js';
 import { authenticate, requirePlan } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/error-handler.js';
 import { createAliasSchema, leakCheckSchema } from '../models/schemas.js';
+import { checkBreaches } from '../services/breach.service.js';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { config } from '../config/index.js';
@@ -74,21 +75,32 @@ privacyRouter.delete('/aliases/:id', authenticate, asyncHandler(async (req: Requ
 privacyRouter.post('/leak-check', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const data = leakCheckSchema.parse(req.body);
 
-  // In production, integrate with HIBP API or similar service
-  // For now, return a placeholder response
+  // Real breach lookup via Have I Been Pwned (requires HIBP_API_KEY).
+  const result = await checkBreaches(data.email);
+
+  if (!result.available) {
+    // Be honest: the feature isn't enabled rather than reporting "0 breaches".
+    throw new AppError(
+      503,
+      'BREACH_CHECK_UNAVAILABLE',
+      'Breach checking is not configured on this server. Set HIBP_API_KEY to enable it.',
+    );
+  }
+
+  // Persist the result for the privacy score calculation.
   const id = uuidv4();
   await pool.query(
     `INSERT INTO leak_checks (id, user_id, checked_email, breaches_found, breach_details)
      VALUES ($1, $2, $3, $4, $5)`,
-    [id, req.user!.userId, data.email, 0, JSON.stringify([])],
+    [id, req.user!.userId, data.email, result.breaches.length, JSON.stringify(result.breaches)],
   );
 
   res.json({
     success: true,
     data: {
       email: data.email,
-      breaches_found: 0,
-      breaches: [],
+      breaches_found: result.breaches.length,
+      breaches: result.breaches,
       checked_at: new Date().toISOString(),
     },
   });

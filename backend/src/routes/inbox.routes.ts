@@ -34,41 +34,57 @@ inboxRouter.post('/', optionalAuth, asyncHandler(async (req: Request, res: Respo
     throw new AppError(403, 'PLAN_REQUIRED', 'Premium domain requires a paid plan');
   }
 
-  // Check user inbox limits
-  if (req.user) {
-    const limits: Record<string, number> = { free: 3, pro: 25, business: 100, enterprise: 9999 };
-    const max = limits[req.user.plan] || 3;
-    const countResult = await pool.query(
-      'SELECT COUNT(*) FROM inboxes WHERE user_id = $1 AND is_active = true',
-      [req.user.userId],
-    );
-    if (parseInt(countResult.rows[0].count) >= max) {
-      throw new AppError(429, 'INBOX_LIMIT', `Plan allows maximum ${max} active inboxes`);
-    }
-  }
-
   const expiresAt = new Date(Date.now() + data.ttl * 1000);
   const id = uuidv4();
 
-  const result = await pool.query(
-    `INSERT INTO inboxes (id, user_id, domain_id, address, access_token, visibility, ttl_seconds, forwarding_to, auto_reply_msg, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     RETURNING id, address, access_token, visibility, expires_at, created_at`,
-    [
-      id,
-      req.user?.userId || null,
-      domainRow.id,
-      prefix,
-      accessToken,
-      data.visibility,
-      data.ttl,
-      data.forwarding?.target || null,
-      data.auto_reply?.message || null,
-      expiresAt,
-    ],
-  );
+  // Create inside a transaction. For authenticated users we take a per-user
+  // advisory lock so the limit check + insert are atomic (prevents two parallel
+  // requests from both passing the count check and exceeding the plan limit).
+  const client = await pool.connect();
+  let inbox: any;
+  try {
+    await client.query('BEGIN');
 
-  const inbox = result.rows[0];
+    if (req.user) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [req.user.userId]);
+
+      const limits: Record<string, number> = { free: 3, pro: 25, business: 100, enterprise: 9999 };
+      const max = limits[req.user.plan] || 3;
+      const countResult = await client.query(
+        'SELECT COUNT(*) FROM inboxes WHERE user_id = $1 AND is_active = true',
+        [req.user.userId],
+      );
+      if (parseInt(countResult.rows[0].count) >= max) {
+        throw new AppError(429, 'INBOX_LIMIT', `Plan allows maximum ${max} active inboxes`);
+      }
+    }
+
+    const result = await client.query(
+      `INSERT INTO inboxes (id, user_id, domain_id, address, access_token, visibility, ttl_seconds, forwarding_to, auto_reply_msg, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, address, access_token, visibility, expires_at, created_at`,
+      [
+        id,
+        req.user?.userId || null,
+        domainRow.id,
+        prefix,
+        accessToken,
+        data.visibility,
+        data.ttl,
+        data.forwarding?.target || null,
+        data.auto_reply?.message || null,
+        expiresAt,
+      ],
+    );
+
+    await client.query('COMMIT');
+    inbox = result.rows[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 
   // Cache in Redis
   await redis?.set(
@@ -217,12 +233,22 @@ inboxRouter.get('/:id/emails', optionalAuth, asyncHandler(async (req: Request, r
 // ─── Helpers ────────────────────────────────────────────────
 
 function generateRandomAddress(): string {
+  // Use cryptographically secure randomness for unguessable inbox addresses.
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = crypto.randomBytes(10);
   let result = '';
   for (let i = 0; i < 10; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(bytes[i] % chars.length);
   }
   return result;
+}
+
+// Constant-time string comparison to avoid timing side-channels on tokens.
+function constantTimeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 async function getInboxWithAuth(id: string, req: Request): Promise<any> {
@@ -238,9 +264,10 @@ async function getInboxWithAuth(id: string, req: Request): Promise<any> {
   const inbox = result.rows[0];
 
   // Auth check: owner, token, or public
-  const token = req.headers['x-inbox-token'] || req.query.token;
+  const rawToken = req.headers['x-inbox-token'] || req.query.token;
+  const token = Array.isArray(rawToken) ? rawToken[0] : rawToken;
   const isOwner = req.user && inbox.user_id === req.user.userId;
-  const hasToken = token === inbox.access_token;
+  const hasToken = typeof token === 'string' && constantTimeEqual(token, inbox.access_token);
   const isPublic = inbox.visibility === 'public';
 
   if (!isOwner && !hasToken && !isPublic) {

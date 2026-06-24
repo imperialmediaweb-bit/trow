@@ -1,3 +1,10 @@
+# Authoritative Railway configuration used for deployment.
+# Railway deploys a single service: the backend (backend/Dockerfile), which
+# builds and embeds the frontend and serves it on internalPort 3000.
+# The backend/ and frontend/ railway.toml files are NOT used for the default
+# deployment; they only apply if those directories are deployed as separate
+# Railway services.
+
 [build]
 builder = "dockerfile"
 dockerfilePath = "backend/Dockerfile"

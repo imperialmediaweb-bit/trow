@@ -2,7 +2,7 @@ import { Worker, Job } from 'bullmq';
 import { pool } from '../config/database.js';
 import { logger } from '../config/logger.js';
 import { analyzeEmail } from '../services/ai.service.js';
-import { decrypt } from '../services/encryption.service.js';
+import { decryptStored } from '../services/encryption.service.js';
 
 const redisUrl = process.env.REDIS_URL;
 
@@ -25,9 +25,9 @@ async function processAiJob(job: Job) {
 
   const email = result.rows[0];
 
-  // Decrypt body
-  let bodyText = email.body_text || '';
-  try { bodyText = decrypt(bodyText); } catch { /* already plain */ }
+  // Decrypt body (plaintext legacy rows pass through; corrupt ciphertext throws
+  // and the job is retried/logged rather than feeding garbage to the AI).
+  const bodyText = decryptStored(email.body_text) || '';
 
   // Run AI analysis
   const analysis = await analyzeEmail(

@@ -8,12 +8,13 @@ import { pool } from '../config/database.js';
 import { redis } from '../config/redis.js';
 import { registerSchema, loginSchema } from '../models/schemas.js';
 import { authenticate } from '../middleware/auth.js';
+import { authLimiter } from '../middleware/rate-limiter.js';
 import { AppError, asyncHandler } from '../middleware/error-handler.js';
 
 export const authRouter = Router();
 
 // POST /auth/register
-authRouter.post('/register', asyncHandler(async (req: Request, res: Response) => {
+authRouter.post('/register', authLimiter, asyncHandler(async (req: Request, res: Response) => {
   const data = registerSchema.parse(req.body);
   const passwordHash = await bcrypt.hash(data.password, 12);
   const id = uuidv4();
@@ -40,7 +41,7 @@ authRouter.post('/register', asyncHandler(async (req: Request, res: Response) =>
 }));
 
 // POST /auth/login
-authRouter.post('/login', asyncHandler(async (req: Request, res: Response) => {
+authRouter.post('/login', authLimiter, asyncHandler(async (req: Request, res: Response) => {
   const data = loginSchema.parse(req.body);
 
   const result = await pool.query(
@@ -129,7 +130,7 @@ authRouter.get('/me', authenticate, asyncHandler(async (req: Request, res: Respo
 }));
 
 // POST /auth/forgot-password
-authRouter.post('/forgot-password', asyncHandler(async (req: Request, res: Response) => {
+authRouter.post('/forgot-password', authLimiter, asyncHandler(async (req: Request, res: Response) => {
   const { email } = req.body;
   if (!email) throw new AppError(400, 'MISSING_EMAIL', 'Email is required');
 
@@ -171,7 +172,7 @@ authRouter.post('/forgot-password', asyncHandler(async (req: Request, res: Respo
 }));
 
 // POST /auth/reset-password
-authRouter.post('/reset-password', asyncHandler(async (req: Request, res: Response) => {
+authRouter.post('/reset-password', authLimiter, asyncHandler(async (req: Request, res: Response) => {
   const { token, new_password } = req.body;
   if (!token || !new_password) throw new AppError(400, 'MISSING_FIELDS', 'Token and new_password are required');
   if (new_password.length < 8) throw new AppError(400, 'WEAK_PASSWORD', 'Password must be at least 8 characters');

@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../services/api.js';
+import { sanitizeHtml } from '../utils/sanitize.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -39,7 +40,22 @@ interface EmailDetail {
 const email = ref<EmailDetail | null>(null);
 const loading = ref(true);
 const error = ref('');
+const planRequired = ref(false);
+const feedback = ref('');
 const showHtml = ref(false);
+
+// Sets a friendly plan-upgrade message for 403 PLAN_REQUIRED errors, otherwise
+// surfaces the raw error message. Returns true if it was a plan error.
+function handleError(err: any, fallback: string): void {
+  const code = err.response?.data?.error?.code;
+  const status = err.response?.status;
+  if (status === 403 && code === 'PLAN_REQUIRED') {
+    planRequired.value = true;
+    error.value = '';
+    return;
+  }
+  error.value = err.response?.data?.error?.message || fallback;
+}
 
 // AI actions
 const aiLoading = ref(false);
@@ -63,12 +79,13 @@ async function fetchEmail() {
 
 async function summarize() {
   aiLoading.value = true;
+  planRequired.value = false;
   try {
     const { data } = await api.post('/ai/summarize', { email_id: emailId });
     aiSummary.value = data.data.summary;
     otpCodes.value = data.data.otp_codes || [];
   } catch (err: any) {
-    error.value = err.response?.data?.error?.message || 'AI analysis failed';
+    handleError(err, 'AI analysis failed');
   } finally {
     aiLoading.value = false;
   }
@@ -76,11 +93,12 @@ async function summarize() {
 
 async function extractOtp() {
   aiLoading.value = true;
+  planRequired.value = false;
   try {
     const { data } = await api.post('/ai/extract-otp', { email_id: emailId });
     otpCodes.value = data.data.otp_codes || [];
   } catch (err: any) {
-    error.value = err.response?.data?.error?.message || 'OTP extraction failed';
+    handleError(err, 'OTP extraction failed');
   } finally {
     aiLoading.value = false;
   }
@@ -88,19 +106,22 @@ async function extractOtp() {
 
 async function phishingCheck() {
   aiLoading.value = true;
+  planRequired.value = false;
   try {
     const { data } = await api.post('/ai/phishing-check', { email_id: emailId });
     phishingResult.value = data.data;
   } catch (err: any) {
-    error.value = err.response?.data?.error?.message || 'Phishing check failed';
+    handleError(err, 'Phishing check failed');
   } finally {
     aiLoading.value = false;
   }
 }
 
 async function deleteEmail() {
+  if (!confirm('Delete this email? This action cannot be undone.')) return;
   try {
     await api.delete(`/emails/${emailId}`);
+    feedback.value = 'Email deleted.';
     router.back();
   } catch (err: any) {
     error.value = err.response?.data?.error?.message || 'Failed to delete';
@@ -111,23 +132,7 @@ function copyOtp(code: string) {
   navigator.clipboard.writeText(code);
 }
 
-function sanitizeHtml(html: string): string {
-  // Remove script tags and event handlers
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/on\w+\s*=\s*[^\s>]*/gi, '')
-    .replace(/javascript\s*:/gi, 'blocked:')
-    .replace(/<iframe\b[^>]*>/gi, '')
-    .replace(/<object\b[^>]*>/gi, '')
-    .replace(/<embed\b[^>]*>/gi, '')
-    .replace(/<form\b[^>]*>/gi, '');
-}
-
-const sanitizedHtml = computed(() => {
-  if (!email.value?.body_html) return '';
-  return sanitizeHtml(email.value.body_html);
-});
+const sanitizedHtml = computed(() => sanitizeHtml(email.value?.body_html));
 
 const securityBadge = computed(() => {
   if (!email.value) return null;
@@ -144,6 +149,12 @@ onMounted(fetchEmail);
 <template>
   <div class="max-w-4xl mx-auto px-4 py-8">
     <button @click="router.back()" class="text-sm text-indigo-600 hover:text-indigo-800 mb-4 inline-block">&larr; Back</button>
+
+    <div v-if="planRequired" class="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg flex items-center justify-between gap-3">
+      <p class="text-sm text-indigo-700 dark:text-indigo-300">This feature requires a Pro plan.</p>
+      <router-link to="/pricing" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 whitespace-nowrap">Upgrade &rarr;</router-link>
+    </div>
+    <div v-if="feedback" class="mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm">{{ feedback }}</div>
 
     <div v-if="loading" class="text-center py-12 text-gray-500">Loading email...</div>
     <div v-else-if="error" class="p-4 bg-red-50 text-red-700 rounded-lg">{{ error }}</div>

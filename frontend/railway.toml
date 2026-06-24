@@ -1,3 +1,8 @@
+# NOT used by the default deployment.
+# This config only applies if the frontend is deployed as a separate Railway
+# service. By default the frontend is built and served by the backend via the
+# root railway.toml (backend/Dockerfile, internalPort 3000).
+
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"

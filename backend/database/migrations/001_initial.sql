@@ -338,18 +338,16 @@ VALUES
   ('throwbox.net', true, 'v=spf1 include:_spf.throwbox.net -all', 'reject', true, false),
   ('tmpmail.dev', false, NULL, 'none', true, true);
 
--- ─── Create Admin User (password: admin123 — CHANGE IMMEDIATELY) ──
-INSERT INTO users (email, password_hash, display_name, role, plan, email_verified)
-VALUES (
-  'admin@throwbox.net',
-  '$2a$12$UDlzNzs/JWxIQha2y5Qcx.C95XzUToVbub1qeaGJJKQBlpCqqZjG6',
-  'Admin',
-  'superadmin',
-  'enterprise',
-  true
-);
+-- ─── Admin User ─────────────────────────────────────────────
+-- No admin is seeded with a hardcoded password. The first admin is created
+-- at application startup from the ADMIN_EMAIL / ADMIN_PASSWORD environment
+-- variables (see bootstrapAdmin() in src/server.ts). This avoids shipping a
+-- known password (previously "admin123") in source control and the database.
 
--- ─── Demo Premium User (password: demo2025) ──
+-- ─── Demo Account ───────────────────────────────────────────
+-- Shared, intentionally public demo account used by the "Demo Login" button
+-- (non-admin, Business plan). Password is rotated via the ADMIN bootstrap is
+-- not applied here; this is a sandboxed demo only — do not store real data.
 INSERT INTO users (email, password_hash, display_name, role, plan, email_verified)
 VALUES (
   'demo@throwbox.net',

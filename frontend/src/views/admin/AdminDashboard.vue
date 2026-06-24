@@ -21,6 +21,10 @@ const statCards = [
 
 <template>
   <div>
+    <div v-if="admin.error" class="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-lg text-sm">
+      {{ admin.error }}
+    </div>
+
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       <div

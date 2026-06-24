@@ -13,6 +13,16 @@ const subject = ref('');
 const body = ref('');
 const sending = ref(false);
 const result = ref<{ type: 'success' | 'error'; message: string } | null>(null);
+const planRequired = ref(false);
+
+// Returns true and flags a plan-upgrade banner for 403 PLAN_REQUIRED errors.
+function isPlanError(err: any): boolean {
+  if (err.response?.status === 403 && err.response?.data?.error?.code === 'PLAN_REQUIRED') {
+    planRequired.value = true;
+    return true;
+  }
+  return false;
+}
 
 // AI states
 const aiLoading = ref(false);
@@ -22,12 +32,15 @@ const toneOptions = ['formal', 'casual', 'business', 'friendly'];
 const selectedTone = ref('business');
 
 async function sendEmail() {
+  // Guard against rapid double-submits.
+  if (sending.value) return;
   if (!selectedInbox.value) {
     result.value = { type: 'error', message: 'Please select an inbox to send from.' };
     return;
   }
   sending.value = true;
   result.value = null;
+  planRequired.value = false;
   try {
     const { data } = await api.post('/emails/send', {
       from_inbox_id: selectedInbox.value,
@@ -41,7 +54,11 @@ async function sendEmail() {
     subject.value = '';
     body.value = '';
   } catch (err: any) {
-    result.value = { type: 'error', message: err.response?.data?.error?.message || 'Failed to send email' };
+    if (isPlanError(err)) {
+      result.value = null;
+    } else {
+      result.value = { type: 'error', message: err.response?.data?.error?.message || 'Failed to send email' };
+    }
   } finally {
     sending.value = false;
   }
@@ -50,6 +67,7 @@ async function sendEmail() {
 async function aiCompose() {
   if (!aiPrompt.value) return;
   aiLoading.value = true;
+  planRequired.value = false;
   try {
     const { data } = await api.post('/ai/compose', {
       prompt: aiPrompt.value,
@@ -64,7 +82,9 @@ async function aiCompose() {
     showAiCompose.value = false;
     aiPrompt.value = '';
   } catch (err: any) {
-    result.value = { type: 'error', message: err.response?.data?.error?.message || 'AI compose failed. Pro plan required.' };
+    if (!isPlanError(err)) {
+      result.value = { type: 'error', message: err.response?.data?.error?.message || 'AI compose failed.' };
+    }
   } finally {
     aiLoading.value = false;
   }
@@ -73,12 +93,15 @@ async function aiCompose() {
 async function grammarCheck() {
   if (!body.value) return;
   aiLoading.value = true;
+  planRequired.value = false;
   try {
     const { data } = await api.post('/ai/grammar', { text: body.value });
     body.value = data.data.corrected;
     result.value = { type: 'success', message: 'Grammar corrected.' };
   } catch (err: any) {
-    result.value = { type: 'error', message: err.response?.data?.error?.message || 'Grammar check failed. Pro plan required.' };
+    if (!isPlanError(err)) {
+      result.value = { type: 'error', message: err.response?.data?.error?.message || 'Grammar check failed.' };
+    }
   } finally {
     aiLoading.value = false;
   }
@@ -87,12 +110,15 @@ async function grammarCheck() {
 async function toneAdjust() {
   if (!body.value) return;
   aiLoading.value = true;
+  planRequired.value = false;
   try {
     const { data } = await api.post('/ai/tone-adjust', { text: body.value, tone: selectedTone.value });
     body.value = data.data.adjusted;
     result.value = { type: 'success', message: `Tone adjusted to ${selectedTone.value}.` };
   } catch (err: any) {
-    result.value = { type: 'error', message: err.response?.data?.error?.message || 'Tone adjust failed. Pro plan required.' };
+    if (!isPlanError(err)) {
+      result.value = { type: 'error', message: err.response?.data?.error?.message || 'Tone adjust failed.' };
+    }
   } finally {
     aiLoading.value = false;
   }
@@ -116,6 +142,10 @@ onMounted(() => {
     </div>
 
     <template v-else>
+      <div v-if="planRequired" class="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg flex items-center justify-between gap-3">
+        <p class="text-sm text-indigo-700 dark:text-indigo-300">This feature requires a Pro plan.</p>
+        <router-link to="/pricing" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 whitespace-nowrap">View plans &rarr;</router-link>
+      </div>
       <div v-if="result" class="mb-4 p-3 rounded-lg text-sm"
         :class="result.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'">
         {{ result.message }}
@@ -126,7 +156,7 @@ onMounted(() => {
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">From Inbox</label>
           <select v-model="selectedInbox" required
-            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-indigo-500">
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
             <option value="" disabled>Select an inbox...</option>
             <option v-for="inbox in inboxStore.inboxes" :key="inbox.id" :value="inbox.id">
               {{ inbox.full_address || `${inbox.address}@${inbox.domain}` }}
@@ -140,26 +170,26 @@ onMounted(() => {
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">To</label>
           <input v-model="to" type="email" required placeholder="recipient@example.com"
-            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-indigo-500" />
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
           <input v-model="subject" required placeholder="Email subject"
-            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-indigo-500" />
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Message</label>
           <textarea v-model="body" rows="8" required placeholder="Write your message..."
-            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-indigo-500"></textarea>
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
         </div>
 
         <!-- AI Compose Panel -->
         <div v-if="showAiCompose" class="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
           <p class="text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-2">AI Email Composer</p>
           <textarea v-model="aiPrompt" rows="3" placeholder="Describe what you want to write, e.g. 'Write a professional follow-up email about the meeting yesterday'"
-            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm"></textarea>
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
           <div class="flex items-center gap-3 mt-2">
-            <select v-model="selectedTone" class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-1 text-sm">
+            <select v-model="selectedTone" class="rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-1 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
               <option v-for="t in toneOptions" :key="t" :value="t">{{ t }}</option>
             </select>
             <button @click="aiCompose" :disabled="aiLoading || !aiPrompt" type="button"
@@ -184,7 +214,7 @@ onMounted(() => {
               class="text-sm px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-gray-700 dark:text-gray-300">
               {{ aiLoading ? '...' : 'Tone' }}
             </button>
-            <select v-model="selectedTone" class="text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-2 py-1">
+            <select v-model="selectedTone" class="text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
               <option v-for="t in toneOptions" :key="t" :value="t">{{ t }}</option>
             </select>
           </div>

@@ -11,7 +11,16 @@ export const webhookRouter = Router();
 // ─── Verify Resend webhook signature (Svix) ────────────────
 function verifyResendSignature(payload: string, headers: Record<string, string>): boolean {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (!secret) return true; // Skip verification if no secret configured
+  if (!secret) {
+    // No secret configured. In production this is unsafe (anyone could inject
+    // fake inbound emails), so we reject. In development we allow it for testing.
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('RESEND_WEBHOOK_SECRET not set — rejecting webhook in production');
+      return false;
+    }
+    logger.warn('RESEND_WEBHOOK_SECRET not set — skipping signature check (dev only)');
+    return true;
+  }
 
   const svixId = headers['svix-id'];
   const svixTimestamp = headers['svix-timestamp'];
@@ -38,9 +47,14 @@ function verifyResendSignature(payload: string, headers: Record<string, string>)
     .update(toSign)
     .digest('base64');
 
-  // svix-signature can contain multiple signatures separated by spaces
+  // svix-signature can contain multiple signatures separated by spaces.
+  // Use constant-time comparison to avoid timing side-channels.
+  const expectedBuf = Buffer.from(expectedSig);
   const signatures = svixSignature.split(' ').map((s: string) => s.replace('v1,', ''));
-  return signatures.some((sig: string) => sig === expectedSig);
+  return signatures.some((sig: string) => {
+    const sigBuf = Buffer.from(sig);
+    return sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf);
+  });
 }
 
 // ─── Resend Inbound Email Webhook ──────────────────────────
@@ -132,55 +146,71 @@ webhookRouter.post('/resend/inbound', async (req: Request, res: Response) => {
       const bodyHtml = htmlBody ? encrypt(htmlBody) : null;
       const preview = textBody.slice(0, 500);
 
-      // Store email
+      // Resend verifies sender authentication upstream, but it is not echoed in
+      // a guaranteed field, so we record 'none' (unknown) rather than asserting
+      // a 'pass' we did not actually verify.
+      const authVerdict = 'none';
+
+      // Store email, counter, and attachments atomically so a mid-write failure
+      // cannot leave an inflated email_count or orphaned rows.
       const emailId = uuidv4();
-      await pool.query(
-        `INSERT INTO emails (id, inbox_id, direction, message_id, from_address, from_name, to_addresses, cc_addresses, reply_to, subject, body_text, body_html, body_preview, headers, size_bytes, has_attachments, spf_result, dkim_result, dmarc_result)
-         VALUES ($1, $2, 'inbound', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
-        [
-          emailId,
-          inboxId,
-          messageId,
-          sender,
-          sender, // from_name - Resend may not separate name
-          JSON.stringify(recipients.map((r: string) => ({ address: r }))),
-          JSON.stringify(Array.isArray(ccAddresses) ? ccAddresses.map((c: string) => ({ address: c })) : []),
-          replyTo,
-          subject,
-          bodyText,
-          bodyHtml,
-          preview,
-          JSON.stringify(data.headers || {}),
-          (textBody.length || 0) + (htmlBody.length || 0),
-          attachments.length > 0,
-          'pass', // Resend verifies SPF
-          'pass', // Resend verifies DKIM
-          'pass', // Resend verifies DMARC
-        ],
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
 
-      // Update inbox counters
-      await pool.query(
-        `UPDATE inboxes SET email_count = email_count + 1, last_email_at = NOW() WHERE id = $1`,
-        [inboxId],
-      );
+        await client.query(
+          `INSERT INTO emails (id, inbox_id, direction, message_id, from_address, from_name, to_addresses, cc_addresses, reply_to, subject, body_text, body_html, body_preview, headers, size_bytes, has_attachments, spf_result, dkim_result, dmarc_result)
+           VALUES ($1, $2, 'inbound', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+          [
+            emailId,
+            inboxId,
+            messageId,
+            sender,
+            sender, // from_name - Resend may not separate name
+            JSON.stringify(recipients.map((r: string) => ({ address: r }))),
+            JSON.stringify(Array.isArray(ccAddresses) ? ccAddresses.map((c: string) => ({ address: c })) : []),
+            replyTo,
+            subject,
+            bodyText,
+            bodyHtml,
+            preview,
+            JSON.stringify(data.headers || {}),
+            (textBody.length || 0) + (htmlBody.length || 0),
+            attachments.length > 0,
+            authVerdict,
+            authVerdict,
+            authVerdict,
+          ],
+        );
 
-      // Store attachments
-      if (attachments.length > 0) {
-        for (const att of attachments) {
-          await pool.query(
-            `INSERT INTO email_attachments (email_id, filename, content_type, size_bytes, storage_key, is_inline)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-              emailId,
-              att.filename || att.name || 'unnamed',
-              att.content_type || att.type || 'application/octet-stream',
-              att.size || (att.content ? Buffer.from(att.content, 'base64').length : 0),
-              `resend/${emailId}/${att.filename || att.name || uuidv4()}`,
-              false,
-            ],
-          );
+        await client.query(
+          `UPDATE inboxes SET email_count = email_count + 1, last_email_at = NOW() WHERE id = $1`,
+          [inboxId],
+        );
+
+        if (attachments.length > 0) {
+          for (const att of attachments) {
+            await client.query(
+              `INSERT INTO email_attachments (email_id, filename, content_type, size_bytes, storage_key, is_inline)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [
+                emailId,
+                att.filename || att.name || 'unnamed',
+                att.content_type || att.type || 'application/octet-stream',
+                att.size || (att.content ? Buffer.from(att.content, 'base64').length : 0),
+                `resend/${emailId}/${att.filename || att.name || uuidv4()}`,
+                false,
+              ],
+            );
+          }
         }
+
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
       }
 
       // Emit real-time WebSocket event

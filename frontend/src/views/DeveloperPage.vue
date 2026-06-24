@@ -63,21 +63,27 @@ async function fetchApiKeys() {
   try {
     const { data } = await api.get('/developer/api-keys');
     apiKeys.value = data.data;
-  } catch { /* ignore */ }
+  } catch (err: any) {
+    error.value = err.response?.data?.error?.message || 'Failed to load API keys';
+  }
 }
 
 async function fetchWebhooks() {
   try {
     const { data } = await api.get('/developer/webhooks');
     webhooks.value = data.data;
-  } catch { /* ignore */ }
+  } catch (err: any) {
+    error.value = err.response?.data?.error?.message || 'Failed to load webhooks';
+  }
 }
 
 async function fetchUsage() {
   try {
     const { data } = await api.get('/developer/usage');
     usage.value = data.data;
-  } catch { /* ignore */ }
+  } catch (err: any) {
+    error.value = err.response?.data?.error?.message || 'Failed to load usage';
+  }
 }
 
 async function createApiKey() {
@@ -234,7 +240,7 @@ curl -X POST /api/v1/ai/summarize \
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-1">Key Name</label>
               <input v-model="keyName" type="text" placeholder="e.g. Production API"
-                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
+                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-1">Scopes</label>
@@ -290,7 +296,7 @@ curl -X POST /api/v1/ai/summarize \
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-1">Endpoint URL</label>
               <input v-model="webhookUrl" type="url" placeholder="https://your-server.com/webhook"
-                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
+                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-1">Events</label>

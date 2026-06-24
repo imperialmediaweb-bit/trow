@@ -41,6 +41,10 @@ async function removeUser(id: string) {
 
 <template>
   <div>
+    <div v-if="admin.error" class="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-lg text-sm">
+      {{ admin.error }}
+    </div>
+
     <!-- Filters -->
     <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
       <div class="flex flex-wrap gap-3 items-center">
@@ -173,7 +177,7 @@ async function removeUser(id: string) {
           </div>
           <div class="flex items-center gap-2">
             <input type="checkbox" v-model="editingUser.is_banned" id="ban-user"
-              class="rounded border-gray-300 text-indigo-600" />
+              class="rounded border border-gray-300 text-indigo-600" />
             <label for="ban-user" class="text-sm text-gray-700 dark:text-gray-300">Ban this user</label>
           </div>
         </div>

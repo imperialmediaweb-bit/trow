@@ -69,7 +69,7 @@ async function testConnection() {
       <div class="flex items-center justify-between mb-6">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">SMTP Configuration</h2>
         <div class="flex items-center gap-2">
-          <input type="checkbox" v-model="smtp.enabled" id="smtp-enabled" class="rounded border-gray-300 text-green-600" />
+          <input type="checkbox" v-model="smtp.enabled" id="smtp-enabled" class="rounded border border-gray-300 text-green-600" />
           <label for="smtp-enabled" class="text-sm font-medium" :class="smtp.enabled ? 'text-green-600' : 'text-gray-500'">
             {{ smtp.enabled ? 'Enabled' : 'Disabled' }}
           </label>
@@ -91,7 +91,7 @@ async function testConnection() {
         </div>
 
         <div class="flex items-center gap-2">
-          <input type="checkbox" v-model="smtp.secure" id="smtp-secure" class="rounded border-gray-300 text-indigo-600" />
+          <input type="checkbox" v-model="smtp.secure" id="smtp-secure" class="rounded border border-gray-300 text-indigo-600" />
           <label for="smtp-secure" class="text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS</label>
         </div>
 

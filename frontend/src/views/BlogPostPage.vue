@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { sanitizeHtml } from '../utils/sanitize.js';
 
 interface BlogPost {
   id: number;
@@ -33,6 +34,8 @@ onMounted(async () => {
     loading.value = false;
   }
 });
+
+const sanitizedContent = computed(() => sanitizeHtml(post.value?.content));
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', {
@@ -89,7 +92,7 @@ function formatDate(dateStr: string): string {
 
       <div
         class="prose prose-gray dark:prose-invert max-w-none prose-headings:font-semibold prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-img:rounded-xl"
-        v-html="post.content"
+        v-html="sanitizedContent"
       ></div>
 
       <!-- Footer -->

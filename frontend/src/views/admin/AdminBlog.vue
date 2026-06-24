@@ -248,7 +248,7 @@ function formatDate(date: string) {
           <!-- Published Toggle -->
           <div class="flex items-center gap-2">
             <input type="checkbox" v-model="editingPost.is_published" id="post-published"
-              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              class="rounded border border-gray-300 text-indigo-600 focus:ring-indigo-500" />
             <label for="post-published" class="text-sm text-gray-700 dark:text-gray-300">Published</label>
           </div>
         </div>

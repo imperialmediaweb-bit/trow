@@ -126,23 +126,23 @@ async function savePrefs() {
 
       <div class="space-y-3">
         <div class="flex items-center gap-2">
-          <input type="checkbox" v-model="prefs.welcome_email" id="n-welcome" class="rounded border-gray-300 text-indigo-600" />
+          <input type="checkbox" v-model="prefs.welcome_email" id="n-welcome" class="rounded border border-gray-300 text-indigo-600" />
           <label for="n-welcome" class="text-sm text-gray-700 dark:text-gray-300">Welcome email on registration</label>
         </div>
         <div class="flex items-center gap-2">
-          <input type="checkbox" v-model="prefs.inbox_expiry_warning" id="n-expiry" class="rounded border-gray-300 text-indigo-600" />
+          <input type="checkbox" v-model="prefs.inbox_expiry_warning" id="n-expiry" class="rounded border border-gray-300 text-indigo-600" />
           <label for="n-expiry" class="text-sm text-gray-700 dark:text-gray-300">Inbox expiry warning (30 min before)</label>
         </div>
         <div class="flex items-center gap-2">
-          <input type="checkbox" v-model="prefs.weekly_digest" id="n-digest" class="rounded border-gray-300 text-indigo-600" />
+          <input type="checkbox" v-model="prefs.weekly_digest" id="n-digest" class="rounded border border-gray-300 text-indigo-600" />
           <label for="n-digest" class="text-sm text-gray-700 dark:text-gray-300">Weekly digest for active users</label>
         </div>
         <div class="flex items-center gap-2">
-          <input type="checkbox" v-model="prefs.marketing_emails" id="n-marketing" class="rounded border-gray-300 text-indigo-600" />
+          <input type="checkbox" v-model="prefs.marketing_emails" id="n-marketing" class="rounded border border-gray-300 text-indigo-600" />
           <label for="n-marketing" class="text-sm text-gray-700 dark:text-gray-300">Marketing/promotional emails</label>
         </div>
         <div class="flex items-center gap-2">
-          <input type="checkbox" v-model="prefs.admin_alerts" id="n-admin" class="rounded border-gray-300 text-indigo-600" />
+          <input type="checkbox" v-model="prefs.admin_alerts" id="n-admin" class="rounded border border-gray-300 text-indigo-600" />
           <label for="n-admin" class="text-sm text-gray-700 dark:text-gray-300">Admin alerts (errors, security events)</label>
         </div>
         <div>

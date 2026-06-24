@@ -36,3 +36,37 @@ export function createPlanLimiter(maxRequests: number) {
     store: getStore(),
   });
 }
+
+// Strict limiter for authentication endpoints to slow brute-force attacks.
+export const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: getStore(),
+  message: {
+    success: false,
+    error: {
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: 'Too many attempts, please try again later',
+      status: 429,
+    },
+  },
+});
+
+// Limiter for expensive AI endpoints (each call hits a paid external API).
+export const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: getStore(),
+  message: {
+    success: false,
+    error: {
+      code: 'AI_RATE_LIMIT',
+      message: 'AI request limit reached, please slow down',
+      status: 429,
+    },
+  },
+});

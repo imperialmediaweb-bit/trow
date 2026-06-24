@@ -7,7 +7,8 @@ import { sendEmailSchema } from '../models/schemas.js';
 import { authenticate } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/error-handler.js';
 import { checkSpamRisk } from '../services/ai.service.js';
-import { decrypt } from '../services/encryption.service.js';
+import { decryptStored } from '../services/encryption.service.js';
+import { verifyCaptcha } from '../services/captcha.service.js';
 import { config } from '../config/index.js';
 import { logger } from '../config/logger.js';
 
@@ -104,13 +105,10 @@ emailRouter.get('/:id', authenticate, asyncHandler(async (req: Request, res: Res
 
   const email = result.rows[0];
 
-  // Decrypt body
-  if (email.body_text) {
-    try { email.body_text = decrypt(email.body_text); } catch { /* already plain */ }
-  }
-  if (email.body_html) {
-    try { email.body_html = decrypt(email.body_html); } catch { /* already plain */ }
-  }
+  // Decrypt body (surfaces real decryption errors instead of silently
+  // returning ciphertext; plaintext legacy rows pass through unchanged).
+  email.body_text = decryptStored(email.body_text);
+  email.body_html = decryptStored(email.body_html);
 
   // Mark as read
   if (!email.is_read) {
@@ -123,6 +121,12 @@ emailRouter.get('/:id', authenticate, asyncHandler(async (req: Request, res: Res
 // POST /emails/send
 emailRouter.post('/send', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const data = sendEmailSchema.parse(req.body);
+
+  // Bot protection: verify CAPTCHA (enforced when HCAPTCHA_SECRET is set)
+  const captchaOk = await verifyCaptcha(data.captcha_token, req.ip);
+  if (!captchaOk) {
+    throw new AppError(400, 'CAPTCHA_FAILED', 'CAPTCHA verification failed');
+  }
 
   // Verify inbox ownership
   const inboxResult = await pool.query(

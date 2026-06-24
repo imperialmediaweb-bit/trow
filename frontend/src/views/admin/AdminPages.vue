@@ -139,7 +139,7 @@ async function removePage(id: string) {
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <input type="checkbox" v-model="editingPage.is_published" id="page-pub" class="rounded border-gray-300 text-indigo-600" />
+            <input type="checkbox" v-model="editingPage.is_published" id="page-pub" class="rounded border border-gray-300 text-indigo-600" />
             <label for="page-pub" class="text-sm text-gray-700 dark:text-gray-300">Published</label>
           </div>
         </div>

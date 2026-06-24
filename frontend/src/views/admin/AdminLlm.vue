@@ -145,7 +145,7 @@ async function testProvider(provider: ProviderKey) {
           </div>
           <div class="flex items-center gap-2">
             <input type="checkbox" v-model="llm.providers[p.key].enabled"
-              :id="`enable-${p.key}`" class="rounded border-gray-300 text-indigo-600" />
+              :id="`enable-${p.key}`" class="rounded border border-gray-300 text-indigo-600" />
             <label :for="`enable-${p.key}`" class="text-sm text-gray-700 dark:text-gray-300">Enabled</label>
           </div>
         </div>

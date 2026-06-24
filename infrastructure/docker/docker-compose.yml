@@ -81,23 +81,15 @@ services:
     networks:
       - throwbox
 
-  # ─── SMTP Server (Haraka) ─────────────────────────────────
-  smtp:
-    build:
-      context: ../../infrastructure/docker/haraka
-      dockerfile: Dockerfile
-    ports:
-      - "25:25"
-      - "587:587"
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - API_URL=http://api:3000
-    depends_on:
-      - redis
-      - api
-    restart: unless-stopped
-    networks:
-      - throwbox
+  # ─── Inbound Mail ──────────────────────────────────────────
+  # There is no standalone Haraka SMTP container. Inbound mail is handled by:
+  #   1. The backend's built-in Node SMTP server
+  #      (backend/src/workers/smtp.server.ts), enabled via ENABLE_SMTP_SERVER=true
+  #      and listening on SMTP_LISTEN_PORT, and/or
+  #   2. Resend Inbound webhooks (see RESEND_WEBHOOK_SECRET).
+  # To accept SMTP directly on the api service, set ENABLE_SMTP_SERVER=true and
+  # publish the SMTP port on that service. The previous Haraka-based `smtp`
+  # service has been removed because its Dockerfile no longer exists.
 
   # ─── Frontend ──────────────────────────────────────────────
   frontend:

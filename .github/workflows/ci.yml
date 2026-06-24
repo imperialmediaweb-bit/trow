@@ -51,6 +51,8 @@ jobs:
       - run: npm run build
       - run: npm test
         env:
+          # Non-production, test-only values used solely for CI.
+          # These are NOT real secrets and must never be used in production.
           DATABASE_URL: postgresql://throwbox:test@localhost:5432/throwbox_test
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-jwt-secret

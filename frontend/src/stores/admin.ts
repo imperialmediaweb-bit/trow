@@ -10,19 +10,41 @@ export const useAdminStore = defineStore('admin', () => {
   const settings = ref<any>(null);
   const pages = ref<any[]>([]);
   const loading = ref(false);
+  const error = ref('');
+
+  function errMsg(err: any, fallback: string): string {
+    return err?.response?.data?.error?.message || fallback;
+  }
 
   async function fetchStats() {
-    const { data } = await api.get('/admin/stats');
-    stats.value = data.data;
+    loading.value = true;
+    error.value = '';
+    try {
+      const { data } = await api.get('/admin/stats');
+      stats.value = data.data;
+    } catch (err: any) {
+      error.value = errMsg(err, 'Failed to load stats');
+    } finally {
+      loading.value = false;
+    }
   }
 
   async function fetchAnalytics(days = 30) {
-    const { data } = await api.get(`/admin/analytics?days=${days}`);
-    analytics.value = data.data;
+    loading.value = true;
+    error.value = '';
+    try {
+      const { data } = await api.get(`/admin/analytics?days=${days}`);
+      analytics.value = data.data;
+    } catch (err: any) {
+      error.value = errMsg(err, 'Failed to load analytics');
+    } finally {
+      loading.value = false;
+    }
   }
 
   async function fetchUsers(params: { page?: number; search?: string; role?: string; plan?: string } = {}) {
     loading.value = true;
+    error.value = '';
     try {
       const query = new URLSearchParams();
       if (params.page) query.set('page', String(params.page));
@@ -33,6 +55,8 @@ export const useAdminStore = defineStore('admin', () => {
       const { data } = await api.get(`/admin/users?${query}`);
       users.value = data.data.users;
       usersPagination.value = data.data.pagination;
+    } catch (err: any) {
+      error.value = errMsg(err, 'Failed to load users');
     } finally {
       loading.value = false;
     }
@@ -51,8 +75,16 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   async function fetchSettings() {
-    const { data } = await api.get('/admin/settings');
-    settings.value = data.data;
+    loading.value = true;
+    error.value = '';
+    try {
+      const { data } = await api.get('/admin/settings');
+      settings.value = data.data;
+    } catch (err: any) {
+      error.value = errMsg(err, 'Failed to load settings');
+    } finally {
+      loading.value = false;
+    }
   }
 
   async function saveSettings(section: string, value: any) {
@@ -71,8 +103,16 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   async function fetchPages() {
-    const { data } = await api.get('/admin/pages');
-    pages.value = data.data;
+    loading.value = true;
+    error.value = '';
+    try {
+      const { data } = await api.get('/admin/pages');
+      pages.value = data.data;
+    } catch (err: any) {
+      error.value = errMsg(err, 'Failed to load pages');
+    } finally {
+      loading.value = false;
+    }
   }
 
   async function createPage(page: any) {
@@ -104,7 +144,7 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   return {
-    stats, analytics, users, usersPagination, settings, pages, loading,
+    stats, analytics, users, usersPagination, settings, pages, loading, error,
     fetchStats, fetchAnalytics, fetchUsers, updateUser, deleteUser,
     fetchSettings, saveSettings, testSmtp, testLlm,
     fetchPages, createPage, updatePage, deletePage,

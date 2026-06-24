@@ -80,7 +80,7 @@ async function resetPassword() {
       <div>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
         <input v-model="email" type="email" required placeholder="you@example.com"
-          class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2" />
+          class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
       </div>
       <button type="submit" :disabled="loading"
         class="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50">
@@ -93,20 +93,27 @@ async function resetPassword() {
 
     <!-- Reset Password Form -->
     <form v-else @submit.prevent="resetPassword" class="space-y-4">
+      <p class="text-sm text-gray-500 dark:text-gray-400">
+        Choose a new password for your account. Your reset link is verified when you submit.
+      </p>
       <div>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
         <input v-model="newPassword" type="password" required minlength="8" placeholder="Minimum 8 characters"
-          class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2" />
+          class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm Password</label>
         <input v-model="confirmPassword" type="password" required minlength="8" placeholder="Repeat password"
-          class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2" />
+          class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
       </div>
       <button type="submit" :disabled="loading"
         class="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50">
         {{ loading ? 'Resetting...' : 'Reset Password' }}
       </button>
+      <p v-if="result?.type === 'error'" class="text-sm text-center text-gray-500">
+        Link expired or invalid?
+        <router-link to="/login" class="text-indigo-600 hover:text-indigo-800">Back to Login</router-link>
+      </p>
     </form>
   </div>
 </template>
